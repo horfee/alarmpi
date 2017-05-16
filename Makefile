@@ -1,8 +1,7 @@
 CC           = $(CROSS_COMPILE)g++
 DESTDIR      = $(prefix)
 
-USE_WIRINGPI :=
-CFLAGS	+= -std=c++0x -O3 -Wall -pthread -DRPI $(USE_WIRINGPI) -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)"
+CFLAGS	+= -std=c++0x -O3 -Wall -pthread -DRPI -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)"
 
 ifneq ($(USE_WIRINGPI),)
 LIBS := -lssl -lpigpiod_if2 -levent -lpthread -lcrypto -lsqlite3 -ldl -lwiringPi
@@ -161,7 +160,7 @@ all: alarmPI
 
 
 %.o: %.cpp
-	$(CC) -c $(CFLAGS) $^ -o $@
+	$(CC) -c -I"$(HEADERSPATH)" $(CFLAGS) $^ -o $@
 
 
 
@@ -169,7 +168,7 @@ all: alarmPI
 alarmPI: $(OBJS)
 	@echo 'Building target: $@'
 	@echo 'Invoking: Linker $(CC)'
-	$(CC) -o "alarmPI" $(OBJS) $(USER_OBJS) $(LIBS)
+	$(CC) -o "alarmPI" $(OBJS) $(USER_OBJS) $(LIBS) -L"$(LIBSPATH)"
 	@echo 'Finished building target: $@'
 
 # Other Targets

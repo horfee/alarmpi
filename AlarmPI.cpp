@@ -30,7 +30,9 @@
 #include "servlets/AlarmPIPingServlet.h"
 
 #ifdef RPI
+#ifdef WIRINGPI
 	#include <wiringPi.h>
+#endif
 #endif
 
 #include <unistd.h>

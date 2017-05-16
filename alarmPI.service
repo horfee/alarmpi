@@ -1,0 +1,10 @@
+[Unit]
+Description=Alarm System deamon
+
+[Service]
+PIDFile=/run/alarmPI.pid
+ExecStart=/usr/bin/alarmPI
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

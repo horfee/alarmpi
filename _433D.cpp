@@ -330,17 +330,17 @@ static void _make_waves(_433D_tx_t *self)
    /*
    Generates the basic waveforms needed to transmit codes.
    */
-   gpioPulse_t arr[] = {{1<<self->gpio, 0, self->t0},{0, 1<<self->gpio, self->gap}};
+   gpioPulse_t arr[] = {{(uint32_t)1<<self->gpio, (uint32_t)0, (uint32_t)self->t0},{(uint32_t)0, (uint32_t)1<<self->gpio, (uint32_t)self->gap}};
    wave_add_generic(self->pi, 2, arr);
 
    self->_amble = wave_create(self->pi);
 
-   gpioPulse_t arr2[] = {{1<<self->gpio, 0, self->t0}, {0, 1<<self->gpio, self->t1}};
+   gpioPulse_t arr2[] = {{(uint32_t)1<<self->gpio, (uint32_t)0, (uint32_t)self->t0}, {(uint32_t)0, (uint32_t)1<<self->gpio, (uint32_t)self->t1}};
    wave_add_generic(self->pi, 2, arr2);
 
    self->_wid0 = wave_create(self->pi);
 
-   gpioPulse_t arr3[] = {{1<<self->gpio, 0, self->t1}, {0, 1<<self->gpio, self->t0}};
+   gpioPulse_t arr3[] = {{(uint32_t)1<<self->gpio, (uint32_t)0, (uint32_t)self->t1}, {(uint32_t)0, (uint32_t)1<<self->gpio, (uint32_t)self->t0}};
    wave_add_generic(self->pi, 2, arr3);
 
    self->_wid1 = wave_create(self->pi);
