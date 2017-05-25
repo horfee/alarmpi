@@ -12,6 +12,9 @@
 #include <string>
 
 #ifdef RPI
+#ifndef _GLIBCXX_USE_NOEXCEPT
+	#define _GLIBCXX_USE_NOEXCEPT	noexcept
+#endif
 	#define EXCEPTION	_GLIBCXX_USE_NOEXCEPT
 #else
 	#define EXCEPTION	_NOEXCEPT

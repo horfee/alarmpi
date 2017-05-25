@@ -28,11 +28,15 @@
 #include "servlets/AlarmPISystemServlet.h"
 #include "servlets/AlarmPISimulateSignalReceivedServlet.h"
 #include "servlets/AlarmPIPingServlet.h"
+#include <syslog.h>
 
 #ifdef RPI
 #ifdef WIRINGPI
 	#include <wiringPi.h>
+#else
+	#include <pigpio.h>
 #endif
+
 #endif
 
 #include <unistd.h>
@@ -68,26 +72,66 @@ using namespace alarmpi;
 
 bool stopAsked = false;
 bool rebootAsked = false;
-//
-//std::vector<std::string> split(std::string text, std::string sep) {
-//	std::istringstream iss(text);
-//	std::vector<std::string>res;
-//	while (iss.good()) {
-//		std::string line;
-//		std::getline(iss,line);
-//		res.push_back(line);
-//	}
-//	return res;
-//}
 
-int main() {
+
+void daemonize(const char* pidfile) {
+
+	/* Daemonize - make ourselves a subprocess. */
+#ifdef HAVE_DAEMON
+	if ( daemon( 1, 1 ) < 0 ) {
+	    syslog( LOG_CRIT, "daemon - %m" );
+	    exit( 1 );
+	}
+#else /* HAVE_DAEMON */
+	switch (fork()) {
+	case 0:
+		break;
+	case -1:
+		syslog( LOG_CRIT, "fork - %m");
+		exit(1);
+	default:
+		exit(0);
+	}
+#endif /* HAVE_DAEMON */
+
+	setsid();
+	if (pidfile != NULL) {
+		/* Write the PID file. */
+		FILE* pidfp = fopen(pidfile, "w");
+		if (pidfp == NULL) {
+			syslog( LOG_CRIT, "%.80s - %m", pidfile);
+			exit(1);
+		}
+		fprintf(pidfp, "%d\n", (int) getpid());
+		fclose(pidfp);
+	}
+
+	char cwd[2048];
+	getcwd( cwd, sizeof(cwd) - 1 );
+	if ( cwd[strlen( cwd ) - 1] != '/' )
+	(void) strcat( cwd, "/" );
+	if (chroot(cwd) < 0) {
+		syslog( LOG_CRIT, "chroot - %m");
+		perror("chroot");
+		exit(1);
+	}
+	if (chdir(cwd) < 0) {
+		syslog( LOG_CRIT, "chroot chdir - %m");
+		perror("chroot chdir");
+		exit(1);
+	}
+
+}
+
+int main(int argc, char* argv[]) {
 
 	struct sigaction sigIntHandler;
 	alarmpi::AlarmSystemDAO* dao;
 	alarmpi::AlarmSystem* alarmSystem;
 	httpserver::HTTPServer* server;
 
-	dao = new alarmpi::AlarmSystemDAOSQLite("alarmsystem.db");
+	daemonize("/var/run/alarmPI.pid");
+	dao = new alarmpi::AlarmSystemDAOSQLite("/var/alarmpi/alarmsystem.db");
 	alarmpi::DAOFactory::getInstance()->setDAO(dao);
 
 	sigIntHandler.sa_handler = [](int s){
@@ -104,6 +148,10 @@ int main() {
 #ifdef WIRINGPI
 	if ( wiringPiSetup() == -1 ) {
 		throw std::logic_error("unable to initialize wiring API");
+	}
+#else
+	if ( gpioInitialise() == PI_INIT_FAILED ) {
+		throw std::logic_error("unable to initialize pigpio API");
 	}
 #endif
 #endif
@@ -180,8 +228,14 @@ int main() {
 		delete it;
 	}
 
+#ifdef RPI
+#ifndef WIRINGPI
+	gpioTerminate();
+#endif
+#endif
+
 	if ( rebootAsked ) {
-		system("sudo reboot now");
+		return system("sudo reboot now");
 	}
 	return 0;
 }

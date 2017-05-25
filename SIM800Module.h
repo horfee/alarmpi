@@ -128,13 +128,18 @@ private:
 
 	std::vector<SIM800ModuleListener*> listeners;
 
+//#if defined(RPI) and defined(WIRINGPI)
 	int simUARTFileStream = 0;
+//#endif
 
 	std::atomic<bool> stop;
 
 #ifdef RPI
 	int resetPin;
 #endif
+//#if defined(RPI) and !defined(WIRINGPI)
+//	int pi;
+//#endif
 
 	void receivingThreadCallBack();
 	void unattendCommandsCallBack();

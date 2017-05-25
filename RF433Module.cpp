@@ -18,9 +18,13 @@ RF433Module::RF433Module(int receivingPIN, int transmittingPIN) {
 	this->transmittingPIN = transmittingPIN;
 	this->receivingPIN = receivingPIN;
 	started = false;
+#ifdef RPI
 	tx = NULL;
 	rx = NULL;
+
 	pi = -1;
+#endif
+
 
 }
 
@@ -58,6 +62,7 @@ std::function<Ret(Params...)> Callback<Ret(Params...)>::func;
 
 void RF433Module::start() {
 
+#ifdef RPI
 	int optRx     = receivingPIN;
 	int optTx     = transmittingPIN;
 
@@ -92,18 +97,24 @@ void RF433Module::start() {
 		_433D_tx_set_repeats(tx, optRepeats);
 		_433D_tx_set_timings(tx, optGap, opt0, opt1);
 	}
+#endif
+
 }
 
+#ifdef RPI
 void RF433Module::cbf(_433D_rx_data_t r){
 	for(RF433MessageListener* listener : listeners) {
 		listener->onSignalReceived(r.code);
 	}
 }
+#endif
 
 void RF433Module::stop() {
+#ifdef RPI
 	_433D_tx_cancel(tx);
 	_433D_rx_cancel(rx);
 	pigpio_stop(pi);
+#endif
 	started = false;
 
 }
@@ -123,6 +134,8 @@ void RF433Module::removeListener(RF433MessageListener* listener) {
 }
 
 void RF433Module::sendMessage(unsigned long long int toSend) {
+#ifdef RPI
 	_433D_tx_send(tx, toSend);
+#endif
 }
 } /* namespace alarmpi */

@@ -9,6 +9,7 @@ Public Domain
 
 #include <stdint.h>
 
+#ifdef RPI
 
 struct _433D_rx_s;
 
@@ -91,5 +92,6 @@ void        _433D_tx_set_repeats(_433D_tx_t *self, int repeats);
 void        _433D_tx_set_bits   (_433D_tx_t *self, int bits);
 void        _433D_tx_set_timings(_433D_tx_t *self, int gap, int t0, int t1);
 
+#endif
 #endif
 

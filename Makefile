@@ -1,12 +1,21 @@
-CC           = $(CROSS_COMPILE)g++
+#CC           = $(CROSS_COMPILE)g++
 DESTDIR      = $(prefix)
 
-CFLAGS	+= -std=c++0x -O3 -Wall -pthread -DRPI -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)"
+RPIFLAG=
+ifdef RPI
+RPIFLAG = -DRPI
+endif
+
+override CFLAGS += -std=c++0x -O3 -Wall $(RPIFLAG) -pthread -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)"
 
 ifneq ($(USE_WIRINGPI),)
-LIBS := -lssl -lpigpiod_if2 -levent -lpthread -lcrypto -lsqlite3 -ldl -lwiringPi
+LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl -lwiringPi
 else
-LIBS := -lssl -lpigpiod_if2 -levent -lpthread -lcrypto -lsqlite3 -ldl
+ifdef RPI
+LIBS := -lssl -lpigpiod_if2 -lpigpio -levent -lpthread -lcrypto -lsqlite3 -ldl
+else
+LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl
+endif
 endif
 
 #PREFIX  := 
@@ -17,6 +26,7 @@ MANDIR = $(prefix)/man
 
 RM := rm -rf
 
+USEPIGPIO =
 CPP_SRCS += \
 AlarmPI.cpp \
 AlarmSystem.cpp \
@@ -155,20 +165,24 @@ actions/RingBellAction.d \
 actions/SendMessageAction.d 
 
 
+CC_LIBS=
+ifneq ($(LIBSPATH),)
+	CC_LIBS=-L"$(LIBSPATH)"
+endif
+
 # All Target
 all: alarmPI
 
 
 %.o: %.cpp
-	$(CC) -c -I"$(HEADERSPATH)" $(CFLAGS) $^ -o $@
+	$(CROSS_COMPILE)$(CXX) -c -I"$(HEADERSPATH)" $(CFLAGS) $^ -o $@
 
 
 
 # Tool invocations
 alarmPI: $(OBJS)
 	@echo 'Building target: $@'
-	@echo 'Invoking: Linker $(CC)'
-	$(CC) -o "alarmPI" $(OBJS) $(USER_OBJS) $(LIBS) -L"$(LIBSPATH)"
+	$(CROSS_COMPILE)$(CXX) -o "alarmPI" $(OBJS) $(USER_OBJS) $(LIBS) $(CC_LIBS)
 	@echo 'Finished building target: $@'
 
 # Other Targets

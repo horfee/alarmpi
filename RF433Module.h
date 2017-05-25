@@ -9,7 +9,10 @@
 #define SOURCES_RF433MODULE_H_
 
 #include <vector>
+
+#ifdef RPI
 #include "_433D.h"
+#endif
 
 namespace alarmpi {
 
@@ -49,14 +52,19 @@ private:
 
 	std::vector<RF433MessageListener*> listeners;
 
-	void cbf(_433D_rx_data_t r);
 
+
+#ifdef RPI
 	int pi;
+
+	void cbf(_433D_rx_data_t r);
    _433D_rx_t *rx;
    _433D_tx_t *tx;
+#endif
 //		vector<int> messagesToSend;
 };
 
 } /* namespace alarmpi */
+
 
 #endif /* SOURCES_RF433MODULE_H_ */

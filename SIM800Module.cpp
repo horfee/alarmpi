@@ -25,6 +25,7 @@
 	#ifdef WIRINGPI
 		#include <wiringPi.h>
 	#else
+		#include <pigpio.h>
 	#endif
 #endif
     #include <stdint.h>
@@ -90,6 +91,7 @@ namespace alarmpi {
 void SIM800Module::sendCommand(std::string cmd, bool includeRF) {
 
 	sendingMutex.lock();
+
 	if ( simUARTFileStream != -1 ) {
 		if ( includeRF ) {
 			cmd.append("\r\n");
@@ -234,6 +236,9 @@ SIM800Module::SIM800Module(int resetPIN, std::string uartStream, int baudrate) {
 #ifdef WIRINGPI
 	pinMode(resetPin, OUTPUT);
 	digitalWrite(resetPin, HIGH);
+#else
+	gpioSetMode(resetPin, PI_OUTPUT);
+	gpioWrite(resetPin, PI_HIGH);
 #endif
 #endif
 
@@ -271,6 +276,7 @@ SIM800Module::SIM800Module(int resetPIN, std::string uartStream, int baudrate) {
 		}
 	} while(r && wait++ < 500) ;
 
+
 	clipFlag = getClipStatus();
 
 	sendCommand("AT+CMGF=1");
@@ -279,6 +285,8 @@ SIM800Module::SIM800Module(int resetPIN, std::string uartStream, int baudrate) {
 		std::cerr << "Unable to enable CMGF=1" << std::endl;
 		throw SIM800Exception();
 	}
+
+
 }
 
 SIM800Module::~SIM800Module() {
@@ -292,6 +300,7 @@ SIM800Module::~SIM800Module() {
 			std::cout << "Error description is : " << strerror(errno) << std::endl;
 		}
 	}
+
 	deamon->join();
 	unattendedCommands->join();
 	delete deamon;
@@ -303,6 +312,10 @@ void SIM800Module::reset() {
 	digitalWrite(this->resetPin, LOW);
 	delay(500);
 	digitalWrite(resetPin, HIGH);
+#else
+	gpioWrite(resetPin, PI_LOW);
+	gpioDelay(5000);
+	gpioWrite(resetPin, PI_HIGH);
 #endif
 #endif
 }

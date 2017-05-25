@@ -7,6 +7,8 @@ Public Domain
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef RPI
+
 #include <pigpiod_if2.h>
 
 #include "_433D.h"
@@ -461,3 +463,5 @@ void _433D_tx_cancel(_433D_tx_t *self)
    }
 }
 
+
+#endif

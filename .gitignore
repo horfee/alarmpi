@@ -31,3 +31,5 @@
 *.out
 *.app
 /lib/
+/.DS_Store
+/alarmPI
