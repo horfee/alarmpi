@@ -360,7 +360,8 @@ void RCSwitch::transmit(int nHighPulses, int nLowPulses) {
     int nReceiverInterrupt_backup = nReceiverPin;
     if (this->nTransmitterPin != -1) {
         if (this->nReceiverPin != -1) {
-            this->disableReceive();
+        	this->nReceiverPin = -1;
+//            this->disableReceive();
             disabled_Receive = true;
         }
 #ifdef RPI
@@ -370,7 +371,8 @@ void RCSwitch::transmit(int nHighPulses, int nLowPulses) {
         delayMicroseconds( this->nPulseLength * nLowPulses);
 #endif
         if(disabled_Receive){
-            this->enableReceive(nReceiverInterrupt_backup);
+        	this->nReceiverPin = nReceiverInterrupt_backup;
+//            this->enableReceive(nReceiverInterrupt_backup);
         }
     }
 }

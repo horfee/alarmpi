@@ -10,7 +10,7 @@
 InvalidConfigFileException::InvalidConfigFileException(std::string reason): reason(reason) {
 }
 
-const char* InvalidConfigFileException::what() const EXCEPTION {
+const char* InvalidConfigFileException::what() const noexcept {
 	return reason.c_str();
 }
 

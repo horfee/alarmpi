@@ -14,7 +14,7 @@ namespace alarmpi {
 
 class BellDevice: public ActionnableDevice {
 public:
-	BellDevice(int id, std::string description, int onValue = 8, int offValue = 0);
+	BellDevice(int id, std::string description, int onValue, int offValue);
 	virtual ~BellDevice();
 
 	virtual std::string getType() const;

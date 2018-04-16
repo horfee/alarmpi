@@ -11,6 +11,8 @@
 #include <algorithm>
 #include <chrono>
 #include <bitset>
+#include "Utils.h"
+
 #ifdef WIRINGPI
 
 RCReceiverTransmitter::RCReceiverTransmitter(int receivingPIN, int transmittingPIN) {
@@ -44,7 +46,7 @@ void RCReceiverTransmitter::sendMessage(int toSend) {
 }
 
 RCReceiverTransmitter::~RCReceiverTransmitter() {
-	std::cout << "Destroying receiver" << endl;
+	logMessage( LOG_DEBUG, "Destroying receiver");
 	this->stop();
 	if ( this->receivingThread != NULL ) {
 		this->receivingThread->join();
@@ -117,11 +119,11 @@ void RCReceiverTransmitter::removeListener(RCMessageListener* listener) {
 }
 
 void RCReceiverTransmitter::receivingThreadCallBack() {
-	std::cout << "Receiving Thread starting" << std::endl;
+	logMessage( LOG_DEBUG, "Receiving Thread starting");
 	while ( !this->stopAsked ) {
-//		std::cout << "Receiving Waiting here" << std::endl;
 
 		int val =this->rcSwitch->waitForValue();
+		logMessage(LOG_DEBUG,"Received : %d", val);
 		if ( !this->stopAsked && val != -1) {
 			std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds >(std::chrono::system_clock::now().time_since_epoch());
 			std::map<int, std::chrono::milliseconds>::iterator t = this->receivedTimes.find(val);
@@ -131,9 +133,6 @@ void RCReceiverTransmitter::receivingThreadCallBack() {
 					l->onSignalReceived(val);
 				}
 			} else {
-	//			cout << "\tNow   : " << ms.count() << endl;
-	//			cout << "\tFound : " << receivedTimes[val].count() << endl;
-	//			cout << "\tDiff  : " << (ms - receivedTimes[val]).count() << endl;
 				if ( (ms - receivedTimes[val]).count() > 1000) {
 					this->receivedTimes[val] = ms;
 					for(RCMessageListener* l : this->listeners) {
@@ -144,48 +143,35 @@ void RCReceiverTransmitter::receivingThreadCallBack() {
 		}
 
 		this->receivingThread = NULL;
-//		delay(100);
-//		if ( this->rcSwitch->available( ) ) {
-//			int value = this->rcSwitch->getReceivedValue();
-//			if ( value == -1 ) {
-//				cout << "Error while waiting for value" << endl;
-//			} else {
-
-//				cout << micros() << " Received value " << value << endl;
-//			}
-//
-//			this->rcSwitch->resetAvailable();
-//		}
 	}
 
-	std::cout << "Receiving Thread ended" << std::endl;
+	logMessage( LOG_DEBUG, "Receiving Thread ended");
 }
 
 void RCReceiverTransmitter::sendingThreadCallBack() {
-	std::cout << "Sending Thread starting" << std::endl;
+	logMessage( LOG_DEBUG, "Sending Thread starting");
 	while ( !this->stopAsked ) {
-
-		std::cout << "Sending Waiting here" << std::endl;
+		logMessage( LOG_DEBUG, "Sending Waiting here");
 		std::unique_lock<std::mutex> lock(mutex);
 		condition.wait(lock);//, [=](){ return !this->messagesToSend.empty();});
 		if ( !this->stopAsked ) {
-			cout << "Getting new message ";
+			logMessage( LOG_DEBUG, "Getting new message");
 			int m = this->messagesToSend.back();
 			this->messagesToSend.pop_back();
-			cout << std::bitset<24>(m) << endl;
+			logMessage( LOG_DEBUG, std::bitset<24>(m).to_string().c_str());
 			this->rcSwitch->send(m, 24);
-			cout << "Message sent " << endl;
+			logMessage( LOG_DEBUG, "Message sent");
 //			delay(1000);
 		}
 
 	}
 
 	this->transmittingThread = NULL;
-	std::cout << "Sending Thread ended" << std::endl;
+	logMessage( LOG_DEBUG, "Sending Thread ended");
 }
 
 void RCReceiverTransmitter::stop() {
-	std::cout << "Asked to stop" << std::endl;
+	logMessage( LOG_DEBUG, "Asked to stop");
 	this->stopAsked = true;
 	condition.notify_all();
 	this->rcSwitch->disableReceive();

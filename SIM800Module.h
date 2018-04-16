@@ -83,6 +83,8 @@ public:
 
 	int sendMessage(std::string numberPhone, std::string message);
 
+	int sendUnicodeMessage(std::string numberPhone, std::string message);
+
 	std::string getModuleVersion();
 
 	std::string getIMEI();
@@ -150,6 +152,7 @@ private:
 
 	std::mutex mutex;
 	std::mutex sendingMutex;
+//	std::mutex sendingMessageMutex;
 	std::condition_variable condition;
 
 	bool clipFlag;

@@ -1,22 +1,26 @@
 #CC           = $(CROSS_COMPILE)g++
 DESTDIR      = $(prefix)
 
-RPIFLAG=
+
 ifdef RPI
 RPIFLAG = -DRPI
 endif
 
-override CFLAGS += -std=c++0x -O3 -Wall $(RPIFLAG) -pthread -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)"
+ifdef WIRINGPI
+WIRINGPIFLAG = -DWIRINGPI
+endif
 
-ifneq ($(USE_WIRINGPI),)
+override CFLAGS += -ggdb -std=c++0x -O0 -Wall -DRPI -DWIRINGPI -pthread -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)"
+
+#ifdef WIRINGPI
 LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl -lwiringPi
-else
-ifdef RPI
-LIBS := -lssl -lpigpiod_if2 -lpigpio -levent -lpthread -lcrypto -lsqlite3 -ldl
-else
-LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl
-endif
-endif
+#else
+#ifdef RPI
+#LIBS := -lssl -lpigpiod_if2 -lpigpio -levent -lpthread -lcrypto -lsqlite3 -ldl
+#else
+#LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl
+#endif
+#endif
 
 #PREFIX  := 
 BINDIR = $(prefix)/bin
@@ -28,6 +32,7 @@ RM := rm -rf
 
 USEPIGPIO =
 CPP_SRCS += \
+TestRC.cpp \
 AlarmPI.cpp \
 AlarmSystem.cpp \
 AlarmSystemDAOSQLite.cpp \
@@ -39,7 +44,7 @@ RCReceiverTransmitter.cpp \
 RCSwitch.cpp \
 RF433Module.cpp \
 SIM800Module.cpp \
-StringUtils.cpp \
+Utils.cpp \
 _433D.cpp \
 servlets/AlarmPIActionsServlet.cpp \
 servlets/AlarmPIAssociationsServlet.cpp \
@@ -51,6 +56,7 @@ servlets/AlarmPIPingServlet.cpp \
 servlets/AlarmPIPropertiesServlet.cpp \
 servlets/AlarmPIServlet.cpp \
 servlets/AlarmPISimulateSignalReceivedServlet.cpp \
+servlets/AlarmPISimulateMessageServlet.cpp \
 servlets/AlarmPISystemServlet.cpp \
 json/jsoncpp.cpp \
 json/jsoncpp.h \
@@ -69,12 +75,14 @@ devices/MotionDevice.cpp \
 devices/RemoteDevice.cpp \
 actions/Action.cpp \
 actions/ActivateAction.cpp \
+actions/ActivateModeAction.cpp \
 actions/CallPhoneAction.cpp \
 actions/DelayAction.cpp \
 actions/RingBellAction.cpp \
 actions/SendMessageAction.cpp 
 
 OBJS += \
+TestRC.o \
 AlarmPI.o \
 AlarmSystem.o \
 AlarmSystemDAOSQLite.o \
@@ -86,7 +94,7 @@ RCReceiverTransmitter.o \
 RCSwitch.o \
 RF433Module.o \
 SIM800Module.o \
-StringUtils.o \
+Utils.o \
 _433D.o \
 servlets/AlarmPIActionsServlet.o \
 servlets/AlarmPIAssociationsServlet.o \
@@ -98,6 +106,7 @@ servlets/AlarmPIPingServlet.o \
 servlets/AlarmPIPropertiesServlet.o \
 servlets/AlarmPIServlet.o \
 servlets/AlarmPISimulateSignalReceivedServlet.o \
+servlets/AlarmPISimulateMessageServlet.o \
 servlets/AlarmPISystemServlet.o \
 httpserver/HTTPFileServlet.o \
 httpserver/HTTPRequest.o \
@@ -113,6 +122,7 @@ devices/MotionDevice.o \
 devices/RemoteDevice.o \
 actions/Action.o \
 actions/ActivateAction.o \
+actions/ActivateModeAction.o \
 actions/CallPhoneAction.o \
 actions/DelayAction.o \
 actions/RingBellAction.o \
@@ -120,6 +130,7 @@ actions/SendMessageAction.o \
 json/jsoncpp.o 
 
 CPP_DEPS += \
+TestRC.d \
 AlarmPI.d \
 AlarmSystem.d \
 AlarmSystemDAOSQLite.d \
@@ -131,7 +142,7 @@ RCReceiverTransmitter.d \
 RCSwitch.d \
 RF433Module.d \
 SIM800Module.d \
-StringUtils.d \
+Utils.d \
 _433D.d \
 servlets/AlarmPIActionsServlet.d \
 servlets/AlarmPIAssociationsServlet.d \
@@ -143,6 +154,7 @@ servlets/AlarmPIPingServlet.d \
 servlets/AlarmPIPropertiesServlet.d \
 servlets/AlarmPIServlet.d \
 servlets/AlarmPISimulateSignalReceivedServlet.d \
+servlets/AlarmPISimulateMessageServlet.d \
 servlets/AlarmPISystemServlet.d \
 json/jsoncpp.d \
 httpserver/HTTPFileServlet.d \
@@ -159,6 +171,7 @@ devices/MotionDevice.d \
 devices/RemoteDevice.d \
 actions/Action.d \
 actions/ActivateAction.d \
+actions/ActivateModeAction.d \
 actions/CallPhoneAction.d \
 actions/DelayAction.d \
 actions/RingBellAction.d \

@@ -16,6 +16,7 @@
 #include <tuple>
 #include <typeinfo>
 #include <vector>
+#include "Utils.h"
 
 #include "actions/ActivateAction.h"
 #include "actions/CallPhoneAction.h"
@@ -39,7 +40,7 @@ std::map<std::size_t, std::function<bool(AlarmSystemDAOSQLite&, Action*)>> actio
 std::map<std::size_t, std::function<bool(AlarmSystemDAOSQLite&, Action*)>> actionUpdaters;
 
 void logSql(int i, const char* message) {
-	std::cerr << i << " ] " << message << std::endl;
+	logMessage(LOG_NOTICE, "%d : %s", i, message);
 }
 
 AlarmSystemDAOSQLite::AlarmSystemDAOSQLite(std::string sFileName) {
@@ -55,21 +56,23 @@ AlarmSystemDAOSQLite::AlarmSystemDAOSQLite(std::string sFileName) {
 	devicePersisters[typeid(BellDevice).hash_code()] 		= &AlarmSystemDAOSQLite::persistBellDevice;
 
 	deviceUpdaters[typeid(MotionDevice).hash_code()] 		= &AlarmSystemDAOSQLite::updateMotionDevice;
-	deviceUpdaters[typeid(MagneticDevice).hash_code()] 	= &AlarmSystemDAOSQLite::updateMagneticDevice;
+	deviceUpdaters[typeid(MagneticDevice).hash_code()] 		= &AlarmSystemDAOSQLite::updateMagneticDevice;
 	deviceUpdaters[typeid(RemoteDevice).hash_code()] 		= &AlarmSystemDAOSQLite::updateRemoteDevice;
-	deviceUpdaters[typeid(BellDevice).hash_code()] 		= &AlarmSystemDAOSQLite::updateBellDevice;
+	deviceUpdaters[typeid(BellDevice).hash_code()] 			= &AlarmSystemDAOSQLite::updateBellDevice;
 
 	actionPersisters[typeid(ActivateAction).hash_code()]	= &AlarmSystemDAOSQLite::persistActivateAction;
 	actionPersisters[typeid(DelayAction).hash_code()]		= &AlarmSystemDAOSQLite::persistDelayAction;
 	actionPersisters[typeid(RingBellAction).hash_code()]	= &AlarmSystemDAOSQLite::persistRingBellAction;
 	actionPersisters[typeid(CallPhoneAction).hash_code()]	= &AlarmSystemDAOSQLite::persistCallPhoneAction;
 	actionPersisters[typeid(SendMessageAction).hash_code()]	= &AlarmSystemDAOSQLite::persistSendMessageAction;
+	actionPersisters[typeid(ActivateModeAction).hash_code()]= &AlarmSystemDAOSQLite::persistActivateModeAction;
 
 	actionUpdaters[typeid(ActivateAction).hash_code()]		= &AlarmSystemDAOSQLite::updateActivateAction;
 	actionUpdaters[typeid(DelayAction).hash_code()]			= &AlarmSystemDAOSQLite::updateDelayAction;
 	actionUpdaters[typeid(RingBellAction).hash_code()]		= &AlarmSystemDAOSQLite::updateRingBellAction;
 	actionUpdaters[typeid(CallPhoneAction).hash_code()]		= &AlarmSystemDAOSQLite::updateCallPhoneAction;
 	actionUpdaters[typeid(SendMessageAction).hash_code()]	= &AlarmSystemDAOSQLite::updateSendMessageAction;
+	actionUpdaters[typeid(ActivateModeAction).hash_code()]	= &AlarmSystemDAOSQLite::updateActivateModeAction;
 }
 
 AlarmSystemDAOSQLite::~AlarmSystemDAOSQLite() {
@@ -94,6 +97,7 @@ void AlarmSystemDAOSQLite::initializeSchema() {
 	queries.push_back("CREATE TABLE IF NOT EXISTS ringbellactions(name TEXT PRIMARY KEY, duration INT, params TEXT)");
 	queries.push_back("CREATE TABLE IF NOT EXISTS sendmessageactions(name TEXT PRIMARY KEY, message TEXT)");
 	queries.push_back("CREATE TABLE IF NOT EXISTS activateactions(name TEXT PRIMARY KEY, data INT, params TEXT)");
+	queries.push_back("CREATE TABLE IF NOT EXISTS activatemodeactions(name TEXT PRIMARY KEY, mode TEXT)");
 	queries.push_back("CREATE TABLE IF NOT EXISTS callphonesactions(name TEXT PRIMARY KEY)");
 	queries.push_back("CREATE TABLE IF NOT EXISTS delayactions(name TEXT PRIMARY KEY, delay INT)");
 
@@ -167,12 +171,14 @@ std::vector<Device*> AlarmSystemDAOSQLite::getDevices() {
 	}
 	sqlite3_finalize(statement);
 
-	query = "SELECT m.deviceid, description FROM alarmdevices d INNER JOIN belldevices m ON m.deviceid = d.deviceid ORDER BY m.deviceid";
+	query = "SELECT m.deviceid, description, onvalue, offvalue FROM alarmdevices d INNER JOIN belldevices m ON m.deviceid = d.deviceid ORDER BY m.deviceid";
 	if(sqlite3_prepare_v2(database, query.c_str(), -1, &statement, 0) == SQLITE_OK) {
 		while ( sqlite3_step(statement) == SQLITE_ROW ) {
 			int deviceid = sqlite3_column_int(statement, 0);
 			std::string description((const char*)sqlite3_column_text(statement, 1));
-			Device* dev = new BellDevice(deviceid, description);
+			int on = sqlite3_column_int(statement, 2);
+			int off = sqlite3_column_int(statement, 3);
+			Device* dev = new BellDevice(deviceid, description, on, off);
 			results.push_back(dev);
 		}
 	}
@@ -651,29 +657,30 @@ std::map<std::string, std::string> actionTypeTableMap = {
 		{"DELAYACTION", "delayactions"},
 		{"RINGBELLACTION", "ringbellactions"},
 		{"SENDMESSAGEACTION", "sendmessageactions"},
+		{"ACTIVATEMODEACTION", "activatemodeactions"}
 };
 
 bool AlarmSystemDAOSQLite::deleteAction(Action* action) {
 	sqlite3_stmt *statement;
-		std::string query = "DELETE FROM actions WHERE name = ?";
-		if ( sqlite3_prepare_v2(database, query.c_str(), -1, &statement, 0) == SQLITE_OK) {
-			sqlite3_bind_text(statement, 1, action->getName().c_str(), -1, SQLITE_TRANSIENT);
-			if ( sqlite3_step(statement) == SQLITE_DONE) {
-				sqlite3_finalize(statement);
+	std::string query = "DELETE FROM actions WHERE name = ?";
+	if ( sqlite3_prepare_v2(database, query.c_str(), -1, &statement, 0) == SQLITE_OK) {
+		sqlite3_bind_text(statement, 1, action->getName().c_str(), -1, SQLITE_TRANSIENT);
+		if ( sqlite3_step(statement) == SQLITE_DONE) {
+			sqlite3_finalize(statement);
 
-				query = "DELETE FROM " + actionTypeTableMap[action->getType()] + " WHERE name = ?";
-				if ( sqlite3_prepare_v2(database, query.c_str(), -1, &statement, 0) == SQLITE_OK) {
-					sqlite3_bind_text(statement, 1, action->getName().c_str(), -1, SQLITE_TRANSIENT);
-						if ( sqlite3_step(statement) == SQLITE_DONE) {
-							sqlite3_finalize(statement);
-							return true;
-						}
-				}
+			query = "DELETE FROM " + actionTypeTableMap[action->getType()] + " WHERE name = ?";
+			if ( sqlite3_prepare_v2(database, query.c_str(), -1, &statement, 0) == SQLITE_OK) {
+				sqlite3_bind_text(statement, 1, action->getName().c_str(), -1, SQLITE_TRANSIENT);
+					if ( sqlite3_step(statement) == SQLITE_DONE) {
+						sqlite3_finalize(statement);
+						return true;
+					}
 			}
 		}
-		sqlite3_finalize(statement);
-		sqlite3_exec(database, "ROLLBACK TRANSACTION;", NULL, NULL, NULL);
-		return false;
+	}
+	sqlite3_finalize(statement);
+	sqlite3_exec(database, "ROLLBACK TRANSACTION;", NULL, NULL, NULL);
+	return false;
 }
 
 std::map<Action*, std::string> AlarmSystemDAOSQLite::loadDelayActions() const {
@@ -714,6 +721,28 @@ std::map<Action*, std::string> AlarmSystemDAOSQLite::loadActivateActions() const
 				nextAction = string((char*)sqlite3_column_text(statement,3));
 			}
 			Action* a = new ActivateAction(name, data, params, true);
+			results[a] = nextAction;
+		}
+	}
+	sqlite3_finalize(statement);
+	return results;
+}
+
+std::map<Action*, std::string> AlarmSystemDAOSQLite::loadActivateModeActions() const {
+	std::map<Action*, std::string> results;
+
+	sqlite3_stmt *statement;
+	std::string query = "SELECT a.name, mode, nextaction FROM actions a inner join activatemodeactions aa on a.name = aa.name";
+
+	if ( sqlite3_prepare_v2(database, query.c_str(), -1, &statement, 0) == SQLITE_OK) {
+		while(sqlite3_step(statement) == SQLITE_ROW ) {
+			string name = (char*)sqlite3_column_text(statement,0);
+			string mode = string((char*)sqlite3_column_text(statement,1));
+			string nextAction("");
+			if ( sqlite3_column_type(statement, 3) != SQLITE_NULL ) {
+				nextAction = string((char*)sqlite3_column_text(statement,2));
+			}
+			Action* a = new ActivateModeAction(name, mode);
 			results[a] = nextAction;
 		}
 	}
@@ -795,12 +824,14 @@ std::vector<Action*> AlarmSystemDAOSQLite::getActions() {
 	std::map<Action*, std::string> c3 = loadRingBellActions();
 	std::map<Action*, std::string> c4 = loadSendMessageActions();
 	std::map<Action*, std::string> c5 = loadDelayActions();
+	std::map<Action*, std::string> c6 = loadActivateModeActions();
 
 	for(auto it = c1.begin(); it != c1.end(); ++it) results.push_back(it->first);
 	for(auto it = c2.begin(); it != c2.end(); ++it) results.push_back(it->first);
 	for(auto it = c3.begin(); it != c3.end(); ++it) results.push_back(it->first);
 	for(auto it = c4.begin(); it != c4.end(); ++it) results.push_back(it->first);
 	for(auto it = c5.begin(); it != c5.end(); ++it) results.push_back(it->first);
+	for(auto it = c6.begin(); it != c6.end(); ++it) results.push_back(it->first);
 
 	std::string nextAction;
 	for(Action* a : results) {
@@ -815,6 +846,8 @@ std::vector<Action*> AlarmSystemDAOSQLite::getActions() {
 			nextAction = c4[a];
 		} else if ( c5.find(a) != c5.end() ) {
 			nextAction = c5[a];
+		} else if ( c6.find(a) != c6.end() ) {
+			nextAction = c6[a];
 		}
 
 		if ( nextAction != "" ) {
@@ -1061,6 +1094,21 @@ bool AlarmSystemDAOSQLite::updateActivateAction(Action* action) {
 	return false;
 }
 
+bool AlarmSystemDAOSQLite::updateActivateModeAction(Action* action) {
+	sqlite3_stmt *statement;
+	std::string query = "UPDATE activatemodeactions set mode = ? WHERE name = ?";
+	if ( sqlite3_prepare_v2(database, query.c_str(), -1, &statement, NULL) == SQLITE_OK) {
+		sqlite3_bind_text(statement, 1, ((ActivateModeAction*)action)->getMode()->getName().c_str(), -1, SQLITE_TRANSIENT);
+		sqlite3_bind_text(statement, 2, action->getName().c_str(), -1, SQLITE_TRANSIENT);
+		if ( sqlite3_step(statement) == SQLITE_DONE) {
+			sqlite3_finalize(statement);
+			return true;
+		}
+	}
+	sqlite3_finalize(statement);
+	return false;
+}
+
 bool AlarmSystemDAOSQLite::persistActivateAction(Action* action) {
 	sqlite3_stmt *statement;
 	std::string query = "INSERT INTO actions (name, nextaction) values (?, ?)";
@@ -1079,6 +1127,39 @@ bool AlarmSystemDAOSQLite::persistActivateAction(Action* action) {
 				sqlite3_bind_text(statement, 1, action->getName().c_str(), -1, SQLITE_TRANSIENT);
 				sqlite3_bind_int(statement , 2, ((ActivateAction*)action)->getValue());
 				sqlite3_bind_text(statement, 3, ((ActivateAction*)action)->getTargets().c_str(), -1, SQLITE_TRANSIENT);
+
+				if ( sqlite3_step(statement) == SQLITE_DONE) {
+					sqlite3_finalize(statement);
+					sqlite3_exec(database, "END TRANSACTION;", NULL, NULL, NULL);
+					return true;
+				}
+			}
+		}
+	}
+
+	sqlite3_finalize(statement);
+	sqlite3_exec(database, "ROLLBACK TRANSACTION;", NULL, NULL, NULL);
+	return false;
+
+}
+
+bool AlarmSystemDAOSQLite::persistActivateModeAction(Action* action) {
+	sqlite3_stmt *statement;
+	std::string query = "INSERT INTO actions (name, nextaction) values (?, ?)";
+
+	sqlite3_exec(database, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+	if ( sqlite3_prepare_v2(database, query.c_str(), -1, &statement, NULL) == SQLITE_OK) {
+		sqlite3_bind_text(statement, 1, action->getName().c_str(), -1, SQLITE_TRANSIENT);
+		if ( action->getNextAction() != NULL ) sqlite3_bind_text(statement, 2, action->getNextAction()->getName().c_str(), -1, SQLITE_TRANSIENT);
+		else sqlite3_bind_null(statement, 2);
+
+		if ( sqlite3_step(statement) == SQLITE_DONE) {
+			sqlite3_finalize(statement);
+
+			query = "INSERT INTO activatemodeactions (name, mode) values ( ?, ? )";
+			if ( sqlite3_prepare_v2(database, query.c_str(), -1, &statement, NULL) == SQLITE_OK) {
+				sqlite3_bind_text(statement, 1, action->getName().c_str(), -1, SQLITE_TRANSIENT);
+				sqlite3_bind_text(statement, 2, ((ActivateModeAction*)action)->getMode()->getName().c_str(), -1, SQLITE_TRANSIENT);
 
 				if ( sqlite3_step(statement) == SQLITE_DONE) {
 					sqlite3_finalize(statement);

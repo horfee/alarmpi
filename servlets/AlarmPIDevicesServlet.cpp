@@ -124,30 +124,29 @@ void AlarmPIDevicesServlet::doPut(HTTPRequest& request, HTTPResponse& response) 
 		} else {
 			int idToAlter = atoi(request.getURL().substr(std::string("/rest/devices/").size()).c_str());
 			Device* device = system->getDevice(idToAlter);
-			if ( value["type"].asString() != device->getType() ) {
-				auto creator = deviceCreators[value["type"].asString()];
-				if ( creator != NULL ) {
-					std::vector<Association> a = system->getAssociations();
-					std::vector<Association> associations;
-					std::copy_if(a.begin(), a.end(), associations.begin(), [&](Association t){
-						return std::get<0>(t) == device;
-					});
 
-					system->removeDevice(device);
-					delete device;
-					device = creator(value);
-					system->addDevice(device);
-					for(Association a : associations) {
-						Mode* mode = std::get<1>(a);
-						Action* action = std::get<2>(a);
-						system->associateActionAndMode(device, action, mode);
+			auto creator = deviceCreators[value["type"].asString()];
+			if ( creator != NULL ) {
+
+				std::vector<std::tuple<Mode*, Action*>> assocs;
+				for(auto a : system->getAssociations()) {
+					if ( std::get<0>(a) == device ) {
+						assocs.push_back(std::make_tuple(std::get<1>(a), std::get<2>(a)));
 					}
-					res = device->toJSON();
 				}
-			} else {
-				device->setDescription(value["description"].asString());
+				system->removeDevice(device);
+				delete device;
+
+				device = creator(value);
+				system->addDevice(device);
+				for(auto a : assocs) {
+					Mode* mode = std::get<0>(a);
+					Action* action = std::get<1>(a);
+					system->associateActionAndMode(device, action, mode);
+				}
 				res = device->toJSON();
 			}
+
 
 			response.setCode(httpOK);
 			response << res;

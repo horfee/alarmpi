@@ -30,7 +30,7 @@
 namespace alarmpi {
 
 class Action;
-
+class ActivateModeAction;
 
 class NotInConfigModeException: public exception {};
 class ModeAlreadyExistsException: public exception {};
@@ -43,13 +43,14 @@ class UnknownModeException: public exception {};
 
 typedef std::tuple<Device*, Mode*, Action*> Association;
 
-class AlarmSystem:
+class AlarmSystem: private SIM800ModuleListener,
 #ifdef WIRINGPI
 		private RCMessageListener
 #else
 		private RF433MessageListener
 #endif
 {
+	friend class ActivateModeAction;
 public:
 	AlarmSystem();
 	virtual ~AlarmSystem();
@@ -93,7 +94,10 @@ public:
 	bool connectToWifi(std::string essid, std::string password) const;
 	bool createAccessPoint(std::string essid, std::string password);
 	std::vector<std::string> ipAddresses() const;
-	int isConnectedToNetwork() const;
+	bool isConnectedToNetwork() const;
+	void addNetworkListener(NetworkListener* listener);
+	void removeNetworkListener(NetworkListener* listener);
+
 	/*********** End of available when in config mode */
 
 
@@ -118,6 +122,8 @@ public:
 	void simulateSignalReceived(std::string signal);
 
 	std::string getVersion() const;
+
+	bool mustStopActionThreads();
 protected:
 	virtual void loadConfiguration();
 	virtual void onSignalReceived(int value);
@@ -153,20 +159,19 @@ private:
 
 	std::vector<Action*> actions;
 
-	std::map<std::tuple<Device*, std::string>, Action*> devicesModesActionsAssociations;
+	std::map<std::tuple<int, std::string>, std::string> devicesModesActionsAssociations;
 
 	std::thread* detectedDevicesCleanUpThread;
 
 	SIM800Module* gsmModule;
 
-	bool mustStopActionThreads();
 
-	bool bMustStopActionThreads;
+	std::atomic<bool> bMustStopActionThreads;
+	std::atomic<int> nbActionThreads;
+////	std::vector<std::thread *> actionThreads;
+//	std::mutex actionThreadsMutex;
 
-	std::vector<std::thread *> actionThreads;
-	std::mutex actionThreadsMutex;
-
-	std::mutex actionThreadMustStopMutex;
+//	std::mutex actionThreadMustStopMutex;
 
 	NetworkModule wifi;
 

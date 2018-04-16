@@ -12,6 +12,7 @@
 #include <regex>
 #include <algorithm>
 #include "InvalidConfigFileException.h"
+#include "../Utils.h"
 
 namespace httpserver {
 
@@ -208,38 +209,47 @@ void HTTPServer::mainCallBack(struct evhttp_request *req, void *ctx) {
 			try {
 				switch(method) {
 				case EVHTTP_REQ_GET:
+					logMessage( LOG_DEBUG, "[GET] %s", url.c_str());
 					servlet->doGet(httpRequest, httpResponse);
 					break;
 				case EVHTTP_REQ_POST:
+					logMessage( LOG_DEBUG, "[POST] %s", url.c_str());
 					servlet->doPost(httpRequest, httpResponse);
 					break;
 				case EVHTTP_REQ_HEAD:
+					logMessage( LOG_DEBUG, "[HEAD] %s", url.c_str());
 					servlet->doHead(httpRequest, httpResponse);
 					break;
 				case EVHTTP_REQ_PUT:
+					logMessage( LOG_DEBUG, "[PUT] %s", url.c_str());
 					servlet->doPut(httpRequest, httpResponse);
 					break;
 				case EVHTTP_REQ_DELETE:
+					logMessage( LOG_DEBUG, "[DELETE] %s", url.c_str());
 					servlet->doDelete(httpRequest, httpResponse);
 					break;
 				case EVHTTP_REQ_OPTIONS:
+					logMessage( LOG_DEBUG, "[REQ] %s", url.c_str());
 					servlet->doOptions(httpRequest, httpResponse);
 					break;
 				case EVHTTP_REQ_TRACE:
+					logMessage( LOG_DEBUG, "[TRACE] %s", url.c_str());
 					servlet->doTrace(httpRequest, httpResponse);
 					break;
 				case EVHTTP_REQ_CONNECT:
+					logMessage( LOG_DEBUG, "[CONNECT] %s", url.c_str());
 					servlet->doConnect(httpRequest, httpResponse);
 					break;
 				case EVHTTP_REQ_PATCH:
+					logMessage( LOG_DEBUG, "[PATCH] %s", url.c_str());
 					servlet->doPatch(httpRequest, httpResponse);
 					break;
 				}
 			} catch (std::exception &e) {
-				std::cerr << e.what() << std::endl;
+				logMessage(LOG_CRIT, "Error : %s", e.what());
 				self->setErrorResponse(httpInternalServerError, httpResponse);
 			} catch (...) {
-				std::cerr << "An error happened" << std::endl;
+				logMessage(LOG_CRIT, "AN unknown error happend");
 				self->setErrorResponse(httpInternalServerError, httpResponse);
 			}
 
@@ -286,10 +296,10 @@ void HTTPServer::mainCallBack(struct evhttp_request *req, void *ctx) {
 					break;
 				}
 			} catch(std::exception &e) {
-				std::cerr << e.what() << std::endl;
+				logMessage(LOG_CRIT, "Error : %s", e.what());
 				self->setErrorResponse(httpInternalServerError, httpResponse);
 			} catch(void* e2) {
-				std::cerr << "An error happened" << std::endl;
+				logMessage(LOG_CRIT, "An unknown error happend");
 				self->setErrorResponse(httpInternalServerError, httpResponse);
 			}
 			evhttp_add_header(evhttp_request_get_output_headers(req), "Content-Type", httpResponse.getContentType().c_str());
@@ -324,13 +334,13 @@ void HTTPServer::start() {
 	/* Create new event base */
 	base = event_base_new();
 	if (!base) {
-		std::cerr << "Couldn't open event base" << std::endl;
+		logMessage(LOG_CRIT, "Cannot open event base");
 		throw "Unable to start server";
 	}
 	http = evhttp_new(base);
 
 	if (!http) {
-		std::cerr << "couldn't create evhttp. Exiting." << std::endl;
+		logMessage(LOG_CRIT, "Cannot create evhttp. Exiting");
 		throw "Unable to create evhttp";
 	}
 	evhttp_set_allowed_methods(http, allowedMethods);
@@ -341,14 +351,14 @@ void HTTPServer::start() {
 	/* Now we tell the evhttp what port to listen on */
 	struct evhttp_bound_socket *handle = evhttp_bind_socket_with_handle(http, serverAddr.c_str(), port);
 	if (!handle) {
-		std::cerr << "couldn't bind to port " << to_string(port) << ". Exiting." << std::endl;
+		logMessage(LOG_CRIT, "Cannot bind to port %d. Exiting", port);
 		throw "Unable to bind address " + serverAddr + ":" + to_string(port);
 	}
 
 	/* Lets rock */
 	std::thread t([&](){
 		event_base_dispatch(base);
-		std::cout << "End of dispatch" << std::endl;
+		logMessage( LOG_DEBUG, "End of dispatch");
 	});
 	t.detach();
 

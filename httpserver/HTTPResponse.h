@@ -126,7 +126,6 @@ public:
 		return stream;
 	}
 
-	// this is the type of std::cout
 	typedef std::basic_ostream<char, std::char_traits<char> > CoutType;
 
 	// this is the function signature of std::endl

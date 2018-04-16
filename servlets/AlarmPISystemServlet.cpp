@@ -18,6 +18,7 @@
 #include "../httpserver/HTTPRequest.h"
 #include "../httpserver/HTTPResponse.h"
 #include "../json/json.h"
+#include "../Utils.h"
 
 namespace alarmpi {
 
@@ -69,8 +70,8 @@ void AlarmPISystemServlet::doPost(HTTPRequest& request, HTTPResponse& response) 
 	} else {
 		std::string encPassword = request.getHeader("password");//value["password"].asString();
 
-		std::cout << "Action : " << action << std::endl;
-		std::cout << "Password : " << encPassword << std::endl;
+		logMessage( LOG_DEBUG, "Action   : %s", action.c_str());
+		logMessage( LOG_DEBUG, "Password : %s", encPassword.c_str());
 
 		if ( !system->testPassword(encPassword) ) {
 			response.setCode(httpUnauthorized);
@@ -99,6 +100,10 @@ void AlarmPISystemServlet::doPost(HTTPRequest& request, HTTPResponse& response) 
 		} else if ( action == "changepassword" ) {
 			system->changePassword(encPassword, value["newPassword"].asString());
 			response.setCode(httpOK);
+		} else if ( action == "selectwifi" ) {
+			std::string ssid = value["ssid"].asString();
+			std::string wifiPassword = value["password"].asString();
+			system->connectToWifi(ssid, wifiPassword);
 		}
 	}
 

@@ -15,6 +15,7 @@
 #include "RCSwitch.h"
 #include <condition_variable>
 #include <chrono>
+#include <atomic>
 
 using namespace std;
 
@@ -62,7 +63,7 @@ private:
 
 	thread* receivingThread;
 	thread* transmittingThread;
-	bool stopAsked;
+	std::atomic<bool> stopAsked;
 
 	vector<RCMessageListener*> listeners;
 	vector<int> messagesToSend;

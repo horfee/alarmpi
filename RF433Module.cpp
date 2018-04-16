@@ -11,6 +11,10 @@
 #include <pigpiod_if2.h>
 #include <functional>
 #include <iostream>
+#include "Utils.h"
+
+#ifdef RPI
+#ifndef WIRINGPI
 
 namespace alarmpi {
 
@@ -18,6 +22,7 @@ RF433Module::RF433Module(int receivingPIN, int transmittingPIN) {
 	this->transmittingPIN = transmittingPIN;
 	this->receivingPIN = receivingPIN;
 	started = false;
+	sending = false;
 #ifdef RPI
 	tx = NULL;
 	rx = NULL;
@@ -83,6 +88,7 @@ void RF433Module::start() {
 	pi = pigpio_start(optHost, optPort);
 	started = pi >= 0;
 	if ( started ) {
+		logMessage(LOG_DEBUG, "PIGPIO successfully started");
 		Callback<void(_433D_rx_data_t)>::func = std::bind(&RF433Module::cbf, this, std::placeholders::_1);
 	    // Convert callback-function to c-pointer.
 	    void (*c_func)(_433D_rx_data_t) = static_cast<decltype(c_func)>(Callback<void(_433D_rx_data_t)>::callback);
@@ -96,6 +102,8 @@ void RF433Module::start() {
 		_433D_tx_set_bits(tx, optBits);
 		_433D_tx_set_repeats(tx, optRepeats);
 		_433D_tx_set_timings(tx, optGap, opt0, opt1);
+	} else {
+		logMessage(LOG_ERR, "Unable to connect to pigpio");
 	}
 #endif
 
@@ -103,9 +111,21 @@ void RF433Module::start() {
 
 #ifdef RPI
 void RF433Module::cbf(_433D_rx_data_t r){
-	for(RF433MessageListener* listener : listeners) {
-		listener->onSignalReceived(r.code);
+	if ( sending ) return;
+	std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds >(std::chrono::system_clock::now().time_since_epoch());
+	std::map<int, std::chrono::milliseconds>::iterator t = this->receivedTimes.find(r.code);
+	if ( t == this->receivedTimes.end()) {
+		for(RF433MessageListener* l : this->listeners) {
+			l->onSignalReceived(r.code);
+		}
+	} else {
+		if ( (ms - receivedTimes[r.code]).count() > 1000) {
+			for(RF433MessageListener* l : this->listeners) {
+				l->onSignalReceived(r.code);
+			}
+		}
 	}
+	this->receivedTimes[r.code] = ms;
 }
 #endif
 
@@ -135,7 +155,17 @@ void RF433Module::removeListener(RF433MessageListener* listener) {
 
 void RF433Module::sendMessage(unsigned long long int toSend) {
 #ifdef RPI
-	_433D_tx_send(tx, toSend);
+	if ( started ) {
+		sending = true;
+		for(int i = 0; i < sendRepeat; i++ ) {
+			_433D_tx_send(tx, toSend);
+		}
+		sending = false;
+	}
 #endif
 }
 } /* namespace alarmpi */
+
+
+#endif
+#endif

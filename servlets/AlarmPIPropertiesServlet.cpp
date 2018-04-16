@@ -6,6 +6,7 @@
  */
 
 #include "AlarmPIPropertiesServlet.h"
+#include "../Utils.h"
 
 namespace alarmpi {
 
@@ -70,7 +71,8 @@ void AlarmPIPropertiesServlet::doPut(HTTPRequest& request, HTTPResponse& respons
 	Json::Reader reader;
 	std::string idToAlter = request.getURL().substr(std::string("/rest/properties/").size());
 	bool parsingSuccessful = reader.parse( request.getData(), value);
-	std::cout << "parsed " << parsingSuccessful << std::endl;
+
+	logMessage( LOG_DEBUG, "Parsed : %d", parsingSuccessful);
 	if ( !parsingSuccessful ) {
 		response.setCode(httpBadRequest);
 	} else {

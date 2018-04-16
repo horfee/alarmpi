@@ -13,7 +13,10 @@
 #include <chrono>
 #include <time.h>
 #include <regex>
-#include "StringUtils.h"
+#include <string>
+#include <locale>
+#include <iomanip>
+#include "Utils.h"
 
 //#include <wiringPi.h>
 //#include <wiringSerial.h>
@@ -68,41 +71,21 @@ typedef uint8_t byte;
 
 namespace alarmpi {
 
-
-
-//
-//void debugDisplayText(std::string text) {
-//
-//
-//	for(char c : text) std::cout << "-----";
-//	std::cout << std::endl;
-//	for(char c : text) {
-//		std::cout << "| " << (c ==  '\n' ? 'n' : c == '\r' ? 'r' : c)  << "  ";
-//	}
-//	std::cout << std::endl;
-//	for(char c : text) std::cout << "-----";
-//	std::cout << std::endl;
-//	for(char c : text) {
-//		std::cout << "| " << (int)c << " ";
-//	}
-//	std::cout << std::endl;
-//}
-
 void SIM800Module::sendCommand(std::string cmd, bool includeRF) {
 
 	sendingMutex.lock();
-
 	if ( simUARTFileStream != -1 ) {
+		logMessage( LOG_DEBUG, "SIM800L - send] : %s", cmd.c_str());
 		if ( includeRF ) {
 			cmd.append("\r\n");
 		}
 		int count = write(simUARTFileStream, (void*)cmd.c_str(), cmd.length());
 		if ( count != (int)cmd.length() ){
-			std::cerr << "NB sent : " << count << " Command length : " << cmd.length() << std::endl;
+			logMessage( LOG_CRIT, "NB Sent : %d. Command lenghth : %d", count, cmd.length());
 			throw SIM800TransmitException();
 		}
 	} else {
-		std::cerr << "Unable to send " << cmd << std::endl;
+		logMessage( LOG_CRIT, "Unable to send %s", cmd.c_str());
 	}
 	sendingMutex.unlock();
 }
@@ -149,7 +132,7 @@ void SIM800Module::receivingThreadCallBack() {
 			char rx_buffer[256];
 			int rx_length = read(simUARTFileStream, (void*)rx_buffer, 255);		//Filestream, buffer to store in, number of bytes to read (max)
 			if (rx_length < 0) {
-				std::cout << "An error occured : " << rx_length << " bytes read" << std::endl;
+				logMessage( LOG_ERR, "An error occured : %d bytes read", rx_length);
 			} else if (rx_length > 0) {
 //				debugDisplayText(buf);
 				rx_buffer[rx_length] = '\0';
@@ -171,6 +154,7 @@ void SIM800Module::receivingThreadCallBack() {
 							callingNumber = callingNumber.substr(1, callingNumber.size() - 2);
 						}
 
+					logMessage( LOG_DEBUG, "SIM800L - receive] : incomming call from %s", callingNumber.c_str());
 					for(auto l : this->listeners) {
 						std::thread([&]{
 							l->onIncomingCall(callingNumber);
@@ -179,10 +163,9 @@ void SIM800Module::receivingThreadCallBack() {
 
 					std::string::size_type i = buf.find(m[0].str());
 					buf = buf.erase(i, i + m[0].str().size());
-					//std::cout << "Buffer reduced" << std::endl;
 				} else if ( std::regex_match(buf, incommingMessageRegex) ) {
 					int msgId = atoi(buf.c_str() + buf.find_last_of(",") + 1);
-
+					logMessage( LOG_DEBUG, "SIM800L - receive] : incomming message, id :%d", msgId);
 					for(auto l : this->listeners) {
 						std::thread([&]{
 							l->onMessageReceived(msgId);
@@ -190,22 +173,23 @@ void SIM800Module::receivingThreadCallBack() {
 					}
 
 					buf = std::regex_replace(buf, incommingMessageRegex, "$2");
-					//std::cout << "Buffer reduced" << std::endl;
 				} else if ( buf.find("\r\nOK\r\n") != std::string::npos	) {
 					std::unique_lock<std::mutex> lock(mutex);
 					readCommands.push_back(buf);
+					logMessage( LOG_DEBUG, "SIM800L - receive] : %s", buf.c_str());
 					buf = "";
 					condition.notify_all();
 
 				} else if ( buf.find("\r\nERROR\r\n") != std::string::npos	) {
 					std::unique_lock<std::mutex> lock(mutex);
 					readCommands.push_back(buf);
+					logMessage( LOG_DEBUG, "SIM800L - receive] : %s", buf.c_str());
 					buf = "";
 					condition.notify_all();
 				}
 			}
 		} else {
-			std::cout << "UNable to read data" << std::endl;
+			logMessage (LOG_ERR, "Unable to read data");
 			stop = true;
 		}
 	}
@@ -244,8 +228,7 @@ SIM800Module::SIM800Module(int resetPIN, std::string uartStream, int baudrate) {
 
 	simUARTFileStream = open(uartStream.c_str(), O_RDWR | O_NOCTTY );
 	if ( simUARTFileStream == -1 ) {
-		std::cerr << "Unable to open the SIM800 uart stream" << std::endl;
-		std::cerr << strerror( errno ) << std::endl;
+		logMessage( LOG_ERR, "Unable to open the SIM800 uart stream on %s\n%s", uartStream.c_str(), strerror(errno));
 		throw SIM800UARTException();
 	}
 
@@ -282,7 +265,7 @@ SIM800Module::SIM800Module(int resetPIN, std::string uartStream, int baudrate) {
 	sendCommand("AT+CMGF=1");
 	SIM800Command cmd = readCommand("AT+CMGF=1");
 	if ( cmd.status != 1 ) {
-		std::cerr << "Unable to enable CMGF=1" << std::endl;
+		logMessage(LOG_CRIT, "Unable to enable CMGF=1");
 		throw SIM800Exception();
 	}
 
@@ -296,8 +279,7 @@ SIM800Module::~SIM800Module() {
 		fcntl(simUARTFileStream, F_SETFL, O_NONBLOCK);
 		int res = close(simUARTFileStream);
 		if ( res == -1 ) {
-			std::cout << "Error no is : " << errno << std::endl;
-			std::cout << "Error description is : " << strerror(errno) << std::endl;
+			logMessage (LOG_ERR, "Unable to close uart : %d\n%s", errno, strerror(errno));
 		}
 	}
 
@@ -367,23 +349,99 @@ std::string SIM800Module::getIMEI() {
 int SIM800Module::sendMessage(std::string numberPhone, std::string message) {
 	SIM800Command res;
 
-	//std::cout << "1] " << res << std::endl;
-	if ( !res.text.empty() ) return false;
+//	sendingMessageMutex.lock();
+	sendCommand("AT+CSMP?");
+	res = readCommand("AT+CSMP?");
+	std::string t = res.text.substr(res.text.find(": ") + 2);
+	std::vector<std::string>vals = split(t,{","});
+	sendCommand("AT+CSMP=" + vals[0] + "," + vals[1] + "," + vals[2] + ",0");
+	res = readCommand("AT+CSMP=" + vals[0] + "," + vals[1] + "," + vals[2] + ",0");
 
-	//std::cout << "1.1] " << std::endl;
 	sendCommand("AT+CMGS=\"" + numberPhone + "\"");// + message + char(26), false);
-	std::this_thread::sleep_for(std::chrono::milliseconds(100));
-	//std::cout << "1.2] " << std::endl;
+	std::this_thread::sleep_for(std::chrono::milliseconds(200));
 	sendCommand(message + char(26),false);
-	//std::cout << "1.3] " << std::endl;
-//	sendCommand(std::string("") , false);
-//	std::cout << "1.4] " << std::endl;
 	res = readCommand("AT+CMGS=\"" + numberPhone + "\"");
-	//std::cout << "2] " << res << std::endl;
 	if ( res.text.find("ERROR") != std::string::npos ) {
 		return -1;
 	}
 	std::string::size_type indx = res.text.find("+CMGS: ") + 7;
+
+	sendCommand("AT+CSMP=" + vals[0] + "," + vals[1] + "," + vals[2] + "," + vals[3]);
+	readCommand("AT+CSMP=" + vals[0] + "," + vals[1] + "," + vals[2] + "," + vals[3]);
+
+	return atoi(res.text.c_str() + indx);
+}
+
+
+std::wstring s2ws(const std::string& s) {
+    std::string curLocale = setlocale(LC_ALL, "");
+    const char* _Source = s.c_str();
+    size_t _Dsize = mbstowcs(NULL, _Source, 0) + 1;
+    wchar_t *_Dest = new wchar_t[_Dsize];
+    wmemset(_Dest, 0, _Dsize);
+    mbstowcs(_Dest,_Source,_Dsize);
+    std::wstring result = _Dest;
+    delete []_Dest;
+    setlocale(LC_ALL, curLocale.c_str());
+    return result;
+}
+
+
+std::string unicode(std::string text) {
+	std::wstring res = s2ws(text);
+
+	std::stringstream stream;
+	for(auto it : res) {
+		int v1,v2;
+		v1 = (0xff00 & ((unsigned char)it)) >> 8;
+		v2 = 0x00ff & ((unsigned char)it);
+
+		stream << std::setfill ('0') << std::setw(sizeof(char)*2) << std::hex << v1 << std::hex << v2;
+	}
+	return stream.str();
+}
+
+int SIM800Module::sendUnicodeMessage(std::string numberPhone, std::string message) {
+	SIM800Command res;
+
+	sendCommand("AT+CSMP?");
+	res = readCommand("AT+CSMP?");
+	std::string t = res.text.substr(res.text.find(": ") + 2);
+	std::vector<std::string>vals = split(t,{","});
+	if ( vals[3] != "8" ) {
+		sendCommand("AT+CSMP=" + vals[0] + "," + vals[1] + "," + vals[2] + ",8");
+		res = readCommand("AT+CSMP=" + vals[0] + "," + vals[1] + "," + vals[2] + ",8");
+	}
+
+	sendCommand("AT+CSCS?");
+	res = readCommand("AT+CSCS?");
+	t = res.text.substr(res.text.find(": ") + 2);
+	if ( t !="\"UCS2\"") {
+		sendCommand("AT+CSCS=\"UCS2\"");
+		res = readCommand("AT+CSCS=\"UCS2\"");
+	}
+
+	std::string unicodeNumberPhone = unicode(numberPhone);
+	std::string unicodeMessage = unicode(message);
+
+	logMessage(LOG_DEBUG, "Number  : %s", unicodeNumberPhone.c_str());
+	logMessage(LOG_DEBUG, "Message : %s", unicodeMessage.c_str());
+	sendCommand("AT+CMGS=\"" + unicodeNumberPhone + "\"");// + message + char(26), false);
+	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+	sendCommand(unicodeMessage + char(26),false);
+	res = readCommand("AT+CMGS=\"" + unicodeNumberPhone + "\"");
+
+	std::string::size_type indx = res.text.find("+CMGS: ") + 7;
+
+	if ( vals[3] != "8" ) {
+		sendCommand("AT+CSMP=" + vals[0] + "," + vals[1] + "," + vals[2] + "," + vals[3]);
+		readCommand("AT+CSMP=" + vals[0] + "," + vals[1] + "," + vals[2] + "," + vals[3]);
+	}
+
+	if ( t !="\"UCS2\"") {
+		sendCommand("AT+CSCS=" + t);
+		readCommand("AT+CSCS=" + t);
+	}
 
 	return atoi(res.text.c_str() + indx);
 }
@@ -468,8 +526,6 @@ SMS createSmsFromString(std::string headerLine, std::string message) {
 	} else if ( strncmp(status.c_str(), "REC READ", 8) == 0 ) {
 		s.status = READ;
 	}
-
-	//std::cout << day << "/" << month << "/" << year << " " << hours << ":" << minutes << ":" << seconds << std::endl;
 
 	struct tm time;
 	time.tm_year = year;
@@ -626,10 +682,7 @@ SignalQuality SIM800Module::getSignalQuality() {
 	SIM800Command lgs(readCommand("AT+CSQ"));
 	std::vector<std::string> lines = split(lgs.text, {"\r","\n"});
 
-	//std::cout << lines[0] << std::endl;
 	lines = split(split(lines[0],{":"})[1],{","});
-	//std::cout << lines[0] << std::endl;
-	//std::cout << lines[1] << std::endl;
 	res.rssi = atoi(lines[0].c_str());
 	res.bitErrorRate = atoi(lines[1].c_str()) / 100.0f;
 
@@ -642,101 +695,8 @@ void SIM800Module::setPinCode(std::string pinCode) {
 	sendCommand("AT+CPIN="+pinCode);
 	SIM800Command res = readCommand("AT+CPIN");
 	std::vector<std::string> lines = split(res.text, {"\r","\n"});
-//	if ( lines[lines.size() - 1] != "OK" ) // log an error
-//		return;
 }
 
 } /* namespace alarmpi */
 
-
-
-//	wiringPiSetup();
-//	pinMode(1, OUTPUT);
-//
-//	cout << "Trying to swith on SIM900" << endl;
-//	digitalWrite(1, HIGH);
-////	delay(5000);
-////	cout << "Release power key" << endl;
-////	digitalWrite(1, LOW);
-////  	cout << "Done" << endl;
-//
-//  	exit(0);
-//
-//	int uart0_filestream = -1;
-//	uart0_filestream = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY | O_NDELAY);		//Open in non blocking read/write mode
-//	if (uart0_filestream == -1)
-//	{
-//		//ERROR - CAN'T OPEN SERIAL PORT
-//		printf("Error - Unable to open UART.  Ensure it is not in use by another application\n");
-//	}
-//
-//	//CONFIGURE THE UART
-//	//The flags (defined in /usr/include/termios.h - see http://pubs.opengroup.org/onlinepubs/007908799/xsh/termios.h.html):
-//	//	Baud rate:- B1200, B2400, B4800, B9600, B19200, B38400, B57600, B115200, B230400, B460800, B500000, B576000, B921600, B1000000, B1152000, B1500000, B2000000, B2500000, B3000000, B3500000, B4000000
-//	//	CSIZE:- CS5, CS6, CS7, CS8
-//	//	CLOCAL - Ignore modem status lines
-//	//	CREAD - Enable receiver
-//	//	IGNPAR = Ignore characters with parity errors
-//	//	ICRNL - Map CR to NL on input (Use for ASCII comms where you want to auto correct end of line characters - don't use for bianry comms!)
-//	//	PARENB - Parity enable
-//	//	PARODD - Odd parity (else even)
-//	struct termios options;
-//	tcgetattr(uart0_filestream, &options);
-//	options.c_cflag = B19200 | CS8 | CLOCAL | CREAD ;		//<Set baud rate
-//	options.c_iflag = IGNPAR;
-//	options.c_oflag = 0;
-//	options.c_lflag = 0;
-//	tcflush(uart0_filestream, TCIFLUSH);
-//	tcsetattr(uart0_filestream, TCSANOW, &options);
-//
-//	unsigned char tx_buffer[20];
-//	unsigned char *p_tx_buffer;
-//
-//	p_tx_buffer = &tx_buffer[0];
-//	*p_tx_buffer++ = 'A';
-//	*p_tx_buffer++ = 'T';
-//	*p_tx_buffer++ = '\r';
-//	*p_tx_buffer++ = '\n';
-//	*p_tx_buffer++ = 0;
-//
-//	if (uart0_filestream != -1)
-//	{
-//		int count = write(uart0_filestream, &tx_buffer[0], (p_tx_buffer - 1 - &tx_buffer[0]));		//Filestream, bytes to write, number of bytes to write
-//		if (count < 0)
-//		{
-//			printf("UART TX error\n");
-//		} else {
-//			printf("UART TX ok\n");
-//		}
-//	}
-//
-//	//----- CHECK FOR ANY RX BYTES -----
-//		if (uart0_filestream != -1)
-//		{
-//			// Read up to 255 characters from the port if they are there
-//			unsigned char rx_buffer[256];
-//			int rx_length = read(uart0_filestream, (void*)rx_buffer, 255);		//Filestream, buffer to store in, number of bytes to read (max)
-//			if (rx_length < 0)
-//			{
-//				printf("An error occured\n");
-//				//An error occured (will occur if there are no bytes)
-//			}
-//			else if (rx_length == 0)
-//			{
-//				printf("No data\n");
-//				//No data waiting
-//			}
-//			else
-//			{
-//				//Bytes received
-//				rx_buffer[rx_length] = '\0';
-//				printf("%i bytes read : ->%s\n<-", rx_length, rx_buffer);
-//			}
-//		}
-//
-//	//----- CLOSE THE UART -----
-//		close(uart0_filestream);
-//
-//	exit(0);
-//
 

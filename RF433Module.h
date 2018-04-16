@@ -9,10 +9,16 @@
 #define SOURCES_RF433MODULE_H_
 
 #include <vector>
+#include <chrono>
+#include <map>
+#include <atomic>
+#ifndef WIRINGPI
 
 #ifdef RPI
 #include "_433D.h"
 #endif
+
+
 
 namespace alarmpi {
 
@@ -52,6 +58,9 @@ private:
 
 	std::vector<RF433MessageListener*> listeners;
 
+	std::atomic<bool> sending;
+
+	int sendRepeat = 1;
 
 
 #ifdef RPI
@@ -60,11 +69,13 @@ private:
 	void cbf(_433D_rx_data_t r);
    _433D_rx_t *rx;
    _433D_tx_t *tx;
+
+   std::map<int, std::chrono::milliseconds> receivedTimes;
 #endif
 //		vector<int> messagesToSend;
 };
 
 } /* namespace alarmpi */
 
-
+#endif
 #endif /* SOURCES_RF433MODULE_H_ */

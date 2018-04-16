@@ -8,8 +8,10 @@
 #include "ActivateAction.h"
 #include "../devices/ActionnableDevice.h"
 #include <iostream>
-#include "../StringUtils.h"
+#include "../Utils.h"
 #include <algorithm>
+
+#define NB_REPEAT 3
 
 namespace alarmpi {
 
@@ -41,7 +43,8 @@ void ActivateAction::execute(Device* device, Mode* mode) {
 
 	for(Device* dev : this->system->getDevices()) {
 		if ( typeid(*dev) == typeid (ActionnableDevice) ) {
-			this->system->sendRFMessage((ActionnableDevice*)dev,value);
+			for(int i = 0; i < NB_REPEAT; i++ )
+				this->system->sendRFMessage((ActionnableDevice*)dev,value);
 		}
 	}
 }

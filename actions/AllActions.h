@@ -11,9 +11,11 @@
 
 
 #include "ActivateAction.h"
+#include "ActivateModeAction.h"
 #include "DelayAction.h"
 #include "RingBellAction.h"
 #include "CallPhoneAction.h"
 #include "SendMessageAction.h"
+
 
 #endif /* ACTIONS_ALLACTIONS_H_ */

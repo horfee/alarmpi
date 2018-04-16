@@ -17,13 +17,9 @@
 #include <clocale>
 #include <tuple>
 #include <openssl/md5.h>
+#include "Utils.h"
 
 namespace alarmpi {
-
-void logMessage(std::string msg) {
-	std::cout << msg << std::endl;
-}
-
 
 bool cleanUpDetectedDevicesThreadMustStop = false;
 std::mutex cleanUpDetectedDevicesThreadMutex;
@@ -41,7 +37,7 @@ void AlarmSystem::cleanUpDetectedDevices() {
 		for(auto detectedDevice = detectedDevices.begin(); detectedDevice != detectedDevices.end(); detectedDevice++) {
 			int key = detectedDevice->first;
 			time_t value = detectedDevice->second;
-			if ( difftime(now, value) > 90.0) {
+			if ( difftime(now, value) > 15.0) {
 				toRemove.push_back(key);
 			}
 		}
@@ -68,15 +64,40 @@ AlarmSystem::AlarmSystem() {
 
 //
 	gsmModule = NULL;
-
+	nbActionThreads = 0;
 	loadConfiguration();
-
+	bMustStopActionThreads = false;
 	detectedDevicesCleanUpThread = new std::thread(&AlarmSystem::cleanUpDetectedDevices, this);
+
+#ifdef WIRINGPI
+	if ( this->wirelessModule != NULL  && !this->wirelessModule->isStarted() ) {
+		logMessage( LOG_NOTICE, "Activating wireless module");
+		try {
+
+			this->wirelessModule->start();
+		} catch (AlreadyRunningException &e) {
+
+		}
+	}
+#else
+	if ( this->rf433Module != NULL && !this->rf433Module->isStarted() ) {
+		logMessage( LOG_NOTICE, "Activating wireless module");
+		this->rf433Module->start();
+	}
+#endif
+
+	wifi.startDeamondWithDefaultPassword(this->getProperty(PROPERTY_ACCESS_POINT_PASS)->getStringValue());
 //	detectedDevices[12345678] = time(0);
 }
 
 AlarmSystem::~AlarmSystem() {
 
+	this->gsmModule->removeListener(this);
+#ifdef WIRINGPI
+	this->wirelessModule->removeListener(this);
+#else
+	this->rf433Module->removeListener(this);
+#endif
 	cleanUpDetectedDevicesThreadMutex.lock();
 	cleanUpDetectedDevicesThreadMustStop = true;
 	cleanUpDetectedDevicesThreadMutex.unlock();
@@ -166,19 +187,26 @@ Action* AlarmSystem::getAction(std::string name) const {
 	return NULL;
 }
 
-const std::vector<std::tuple<Device*, Mode*, Action*>> AlarmSystem::getAssociations() const {
+const std::vector<Association> AlarmSystem::getAssociations() const {
 	std::vector<std::tuple<Device*, Mode*, Action*>> res;
 
 	for(auto it : this->devicesModesActionsAssociations) {
-		std::tuple<Device*, Mode*, Action*> t = std::make_tuple(std::get<0>(it.first),getMode(std::get<1>(it.first)), it.second);
+		int devId = std::get<0>(it.first);
+		std::string mode = std::get<1>(it.first);
+		std::string action = it.second;
+		Device* d = getDevice(devId);
+		Mode* m = getMode(mode);
+		Action* a = getAction(action);
+		logMessage( LOG_DEBUG, "Creating assoc with \"%d\" - \"%s\" - \"%s\"", devId, mode.c_str(), action.c_str());
+		std::tuple<Device*, Mode*, Action*> t = std::make_tuple(d, m, a);
 		res.push_back(t);
 	}
 	return res;
 }
 
 void AlarmSystem::associateActionAndMode(Device* device, Action* action, Mode* mode) {
-	std::tuple<Device*, std::string> key;
-	key = std::make_tuple(device,mode->getName());
+	std::tuple<int, std::string> key;
+	key = std::make_tuple(device->getId(),mode->getName());
 
 	AlarmSystemDAO* dao = DAOFactory::getInstance()->getDAO();
 
@@ -186,16 +214,23 @@ void AlarmSystem::associateActionAndMode(Device* device, Action* action, Mode* m
 		dao->deleteAssociation(device, mode);
 	}
 
-	devicesModesActionsAssociations[key] = action;
+	if ( action == NULL ) {
+		dao->deleteAssociation(device, mode);
+		devicesModesActionsAssociations.erase(key);
+	} else {
+		devicesModesActionsAssociations[key] = action->getName();
+	}
 
-	std::cout << "Creating association between " << device->getId() << ", " << mode->getName() << ", " << action->getName() << std::endl;
+
+
+	logMessage( LOG_DEBUG, "Creating association between %d, %s, %s", device->getId(), mode->getName().c_str(), action->getName().c_str());
 	dao->persistAssocation(device, mode, action);
 }
 
 void AlarmSystem::removeAssociation(Device* device, Mode* mode) {
 	if ( device == NULL || mode == NULL ) return;
-	std::tuple<Device*, std::string> key;
-	key = std::make_tuple(device,mode->getName());
+	std::tuple<int, std::string> key;
+	key = std::make_tuple(device->getId(),mode->getName());
 	this->devicesModesActionsAssociations.erase(key);
 
 	AlarmSystemDAO* dao = DAOFactory::getInstance()->getDAO();
@@ -204,7 +239,7 @@ void AlarmSystem::removeAssociation(Device* device, Mode* mode) {
 
 void AlarmSystem::loadConfiguration() {
 
-	logMessage("Loading config");
+	logMessage(LOG_NOTICE, "Loading config");
 
 	AlarmSystemDAO* dao = DAOFactory::getInstance()->getDAO();
 
@@ -218,7 +253,7 @@ void AlarmSystem::loadConfiguration() {
 	}
 
 	vector<std::tuple<int, std::string, std::string>> assocs = dao->getAssociations();
-	std::tuple<Device*, std::string> key;
+	std::tuple<int, std::string> key;
 	for(auto t : assocs) {
 		Device* d = getDevice(std::get<0>(t));
 		Mode* m = getMode(std::get<1>(t));
@@ -226,8 +261,9 @@ void AlarmSystem::loadConfiguration() {
 		if ( m == NULL ) continue;
 		Action* a = getAction(std::get<2>(t));
 
-		key = std::make_tuple(d,m->getName());
-		this->devicesModesActionsAssociations[key] = a;
+		if ( a == NULL ) continue;
+		key = std::make_tuple(d->getId(),m->getName());
+		this->devicesModesActionsAssociations[key] = a->getName();
 	}
 
 	if ( getMode("Active") == NULL ) {
@@ -253,7 +289,7 @@ void AlarmSystem::loadConfiguration() {
 	Property* receivingPinProperty = getProperty(PROPERTY_RECEIVING_PIN);
 	Property* transmittingPinProperty = getProperty(PROPERTY_TRANSMITTING_PIN);
 	Property* sim800ResetPinProperty  = getProperty(PROPERTY_SIM800RESET_PIN);
-	Property* sim800FileStreamProperty  = getProperty(PROPERTY_SIM800RESET_PIN);
+	Property* sim800FileStreamProperty  = getProperty(PROPERTY_SIM800STREAM);
 	Property* sim800BaudRateProperty  = getProperty(PROPERTY_SIM800RESET_PIN);
 
 	if ( receivingPinProperty == NULL ) {
@@ -268,7 +304,7 @@ void AlarmSystem::loadConfiguration() {
 	}
 
 	try {
-		logMessage(std::string("Creating RF module on pin ") + std::to_string(receivingPinProperty->getIntValue()) + std::string(" / ") + std::to_string(transmittingPinProperty->getIntValue()));
+		logMessage(LOG_NOTICE, "Creating RF module on pin %d / %d", receivingPinProperty->getIntValue(), transmittingPinProperty->getIntValue());
 #ifdef WIRINGPI
 		wirelessModule = new RCReceiverTransmitter(receivingPinProperty->getIntValue(), transmittingPinProperty->getIntValue());
 		wirelessModule->addListener(this);
@@ -283,7 +319,7 @@ void AlarmSystem::loadConfiguration() {
 #else
 		rf433Module = NULL;
 #endif
-		std::cout << "Error catched : " << e.what() << std::endl;
+		logMessage( LOG_ERR, "Error catched : %s", e.what());
 	}
 
 	if ( sim800ResetPinProperty == NULL ) {
@@ -306,14 +342,15 @@ void AlarmSystem::loadConfiguration() {
 
 #ifdef RPI
 	try {
-		logMessage(std::string("Creating gsm module on ") + sim800FileStreamProperty->getStringValue() + std::string("/ pin ") + std::to_string(sim800ResetPinProperty ->getIntValue()));
+		logMessage(LOG_NOTICE, "Creating gsm module on %s / pin %d", sim800FileStreamProperty->getStringValue().c_str(), sim800ResetPinProperty ->getIntValue());
 		gsmModule = new SIM800Module(sim800ResetPinProperty->getIntValue(), sim800FileStreamProperty->getStringValue(), sim800BaudRateProperty->getIntValue());
+		gsmModule->addListener(this);
 	} catch ( alarmpi::SIM800UARTException &e2 ) {
 		gsmModule = NULL;
 	} catch ( alarmpi::SIM800Exception &e3 ) {
 		gsmModule = NULL;
 	} catch ( std::runtime_error &re ) {
-		std::cerr << re.what() << std::endl;
+		logMessage(LOG_CRIT, "Error : %s", re.what());
 	}
 #else
 	gsmModule = NULL;
@@ -341,16 +378,16 @@ void AlarmSystem::loadConfiguration() {
 		dao->persistProperty(localeProperty);
 	}
 
-	std::locale l = std::locale(localeProperty->getStringValue() + ".UTF-8");
-	std::locale::global(l);
+	//std::locale l = std::locale(localeProperty->getStringValue() + ".UTF-8");
+	//std::locale::global(l);
 
 	this->activateMode(lastModeProperty->getStringValue(), passwordProperty->getStringValue());
 
-	logMessage("config loaded");
+	logMessage(LOG_NOTICE, "config loaded");
 }
 
 void AlarmSystem::saveConfiguration() {
-	logMessage("Saving configuration");
+	logMessage(LOG_NOTICE, "Saving configuration");
 
 	AlarmSystemDAO* dao = DAOFactory::getInstance()->getDAO();
 	for(Device *device : devices) {
@@ -360,9 +397,9 @@ void AlarmSystem::saveConfiguration() {
 		dao->persistAction(action);
 	}
 	for(auto assoc : devicesModesActionsAssociations) {
-		Device* device = std::get<0>(assoc.first);
+		Device* device = getDevice(std::get<0>(assoc.first));
 		Mode* mode = getMode(std::get<1>(assoc.first));
-		Action* action = assoc.second;
+		Action* action = getAction(assoc.second);
 		dao->persistAssocation(device, mode, action);
 	}
 
@@ -376,7 +413,7 @@ void AlarmSystem::saveConfiguration() {
 		dao->persistProperty(property);
 	}
 
-	logMessage("Configuration saved");
+	logMessage(LOG_NOTICE, "Configuration saved");
 }
 
 
@@ -422,12 +459,12 @@ void AlarmSystem::removeMode(Mode* mode) { //string mode) {
 	if( mode->getType() != ModeType::Active ) throw InvalidModeException();
 	if ( mode == NULL ) return;
 
-	std::map<std::tuple<Device*, std::string>, Action*>::iterator it = this->devicesModesActionsAssociations.end();
-	std::map<std::tuple<Device*, std::string>, Action*>::iterator first = this->devicesModesActionsAssociations.begin();
+	std::map<std::tuple<int, std::string>, std::string>::iterator it = this->devicesModesActionsAssociations.end();
+	std::map<std::tuple<int, std::string>, std::string>::iterator first = this->devicesModesActionsAssociations.begin();
 	while (it != first ) {
 		Mode* m = this->getMode(std::get<1>(it->first));
 		if (m == mode ) {
-			Device* device = std::get<0>(it->first);
+			Device* device = getDevice(std::get<0>(it->first));
 			this->removeAssociation(device, mode);
 		}
 		it--;
@@ -441,16 +478,12 @@ void AlarmSystem::removeAction(Action* toRemove) {
 	if ( !isConfigMode() ) throw NotInConfigModeException();
 	if ( toRemove == NULL ) return;
 
-	std::map<std::tuple<Device*, std::string>, Action*>::iterator it = this->devicesModesActionsAssociations.end();
-	std::map<std::tuple<Device*, std::string>, Action*>::iterator first = this->devicesModesActionsAssociations.begin();
-	while (it != first ) {
-		if (it->second == toRemove ) {
-			Device* device = std::get<0>(it->first);
-			Mode* mode = this->getMode(std::get<1>(it->first));
-			this->removeAssociation(device, mode);
-			//devicesModesActionsAssociations.erase(it->first);
+	for(Mode* m : modes) {
+		for(Device* d : devices) {
+			if ( getAssociation(d->getId(), m->getName()) == toRemove ) {
+					removeAssociation(d, m);
+			}
 		}
-		it--;
 	}
 
 	for(Action * a : actions) {
@@ -472,12 +505,12 @@ void AlarmSystem::addAction(Action* toAdd) {
 
 Action* AlarmSystem::getAssociation(int deviceId, std::string mode) const {
 
-	Device* dev = getDevice(deviceId);
-	std::tuple<Device*, std::string> key = std::make_tuple(dev, mode);
+//	Device* dev = getDevice(deviceId);
+	std::tuple<int, std::string> key = std::make_tuple(deviceId, mode);
 
 	auto it = devicesModesActionsAssociations.find(key);
 	if ( it == devicesModesActionsAssociations.end() ) return NULL;
-	return it->second;
+	return getAction(it->second);
 }
 
 void AlarmSystem::addDevice(Device* toAdd) {
@@ -486,7 +519,8 @@ void AlarmSystem::addDevice(Device* toAdd) {
 	if ( getDevice(toAdd->getId()) != NULL ) throw AlarmDeviceAlreadyExistsException();
 	devices.push_back(toAdd);
 
-	std::cout << "Adding device " << toAdd->getId() << std::endl;
+
+	logMessage( LOG_DEBUG, "Adding device : %d", toAdd->getId());
 	DAOFactory::getInstance()->getDAO()->persistDevice(toAdd);
 	detectedDevicesMutex.lock();
 	auto d = detectedDevices.find(toAdd->getId());
@@ -501,17 +535,24 @@ void AlarmSystem::removeDevice(Device* toRemove) {
 	if ( !isConfigMode() ) throw NotInConfigModeException();
 	if ( toRemove == NULL ) return;
 
-	std::map<std::tuple<Device*, std::string>, Action*>::iterator it = this->devicesModesActionsAssociations.end();
-	std::map<std::tuple<Device*, std::string>, Action*>::iterator first = this->devicesModesActionsAssociations.begin();
-	while (it != first ) {
-		Device* device = std::get<0>(it->first);
-		if (device == toRemove ) {
-			Mode* mode = this->getMode(std::get<1>(it->first));
-			this->removeAssociation(device, mode);
+	for(Mode* m : modes) {
+		if ( getAssociation(toRemove->getId(), m->getName()) != NULL ) {
+			removeAssociation(toRemove, m);
 		}
-		it--;
 	}
+//	std::map<std::tuple<Device*, std::string>, Action*>::iterator it = this->devicesModesActionsAssociations.end();
+//	std::map<std::tuple<Device*, std::string>, Action*>::iterator first = this->devicesModesActionsAssociations.begin();
+//	while (it != first ) {
+//		Device* device = std::get<0>(it->first);
+//		if (device == toRemove ) {
+//			Mode* mode = this->getMode(std::get<1>(it->first));
+//			this->removeAssociation(device, mode);
+//		}
+//		it--;
+//	}
+	logMessage( LOG_DEBUG, "Device count before erase : %d", devices.size());
 	devices.erase(std::remove(devices.begin(), devices.end(), toRemove),devices.end());
+	logMessage( LOG_DEBUG, "Device count after erase : %d", devices.size());
 	DAOFactory::getInstance()->getDAO()->deleteDevice(toRemove);
 
 }
@@ -521,33 +562,28 @@ bool AlarmSystem::isConfigMode() const {
 }
 
 bool AlarmSystem::mustStopActionThreads() {
-	bool b;
-	actionThreadMustStopMutex.lock();
-	b = bMustStopActionThreads;
-	actionThreadMustStopMutex.unlock();
-	return b;
+	return bMustStopActionThreads;
 }
 
 void AlarmSystem::stopActionThreads() {
 
-	actionThreadMustStopMutex.lock();
+//	actionThreadMustStopMutex.lock();
 	bMustStopActionThreads = true;
-	actionThreadMustStopMutex.unlock();
+//	actionThreadMustStopMutex.unlock();
 
-	// TODO : wait for actionThreads is empty
-	std::unique_lock<std::mutex> lk(actionThreadsMutex);
-	cv.wait(lk, [&]{ return nbActionThreads == this->actionThreads.size();});
+//	std::unique_lock<std::mutex> lk(actionThreadsMutex);
+//	cv.wait(lk, [&]{ return nbActionThreads == this->actionThreads.size();});
 
-	for(std::thread* t : actionThreads) {
-		t->join();
-		delete t;
-	}
-	nbActionThreads = 0;
-	this->actionThreads.clear();
+//	for(std::thread* t : actionThreads) {
+//		t->join();
+//		delete t;
+//	}
+//	nbActionThreads = 0;
+//	this->actionThreads.clear();
 
-	actionThreadMustStopMutex.lock();
-	bMustStopActionThreads = false;
-	actionThreadMustStopMutex.unlock();
+//	actionThreadMustStopMutex.lock();
+//	bMustStopActionThreads = false;
+//	actionThreadMustStopMutex.unlock();
 }
 void AlarmSystem::activateMode(string mode, string encPassword) {
 
@@ -557,30 +593,30 @@ void AlarmSystem::activateMode(string mode, string encPassword) {
 		if ( p->getStringValue() != encPassword) throw InvalidPasswordException();
 
 		currentMode = mode;
-		if ( m->getType() == ModeType::Inactive ) {
-#ifdef WIRINGPI
-			if ( this->wirelessModule != NULL ) this->wirelessModule->stop();
-#else
-			if ( this->rf433Module != NULL ) this->rf433Module->stop();
-#endif
-		} else {
-#ifdef WIRINGPI
-			if ( this->wirelessModule != NULL  && !this->wirelessModule->isStarted() ) {
-				std::cout << "Activating wireless module" << std::endl;
-				try {
-
-					this->wirelessModule->start();
-				} catch (AlreadyRunningException &e) {
-
-				}
-			}
-#else
-			if ( this->rf433Module != NULL && !this->rf433Module->isStarted() ) {
-				std::cout << "Activating wireless module" << std::endl;
-				this->rf433Module->start();
-			}
-#endif
-		}
+//		if ( m->getType() == ModeType::Inactive ) {
+//#ifdef WIRINGPI
+//			if ( this->wirelessModule != NULL ) this->wirelessModule->stop();
+//#else
+//			if ( this->rf433Module != NULL ) this->rf433Module->stop();
+//#endif
+//		} else {
+//#ifdef WIRINGPI
+//			if ( this->wirelessModule != NULL  && !this->wirelessModule->isStarted() ) {
+//				logMessage( LOG_NOTICE, "Activating wireless module");
+//				try {
+//
+//					this->wirelessModule->start();
+//				} catch (AlreadyRunningException &e) {
+//
+//				}
+//			}
+//#else
+//			if ( this->rf433Module != NULL && !this->rf433Module->isStarted() ) {
+//				logMessage( LOG_NOTICE, "Activating wireless module");
+//				this->rf433Module->start();
+//			}
+//#endif
+//		}
 		stopActionThreads();
 		for(Device* dev : devices) {
 			if ( typeid(*dev) == typeid(BellDevice)) {
@@ -596,7 +632,7 @@ void AlarmSystem::activateMode(string mode, string encPassword) {
 			prop->setStringValue(mode);
 		}
 		DAOFactory::getInstance()->getDAO()->persistProperty(prop);
-		logMessage("Mode " + mode + " activated.");
+		logMessage(LOG_NOTICE, std::string("Mode " + mode + " activated.").c_str());
 	} else {
 		throw UnknownModeException();
 	}
@@ -621,16 +657,12 @@ const vector<Mode*> AlarmSystem::getModes() const{
 }
 
 void AlarmSystem::sendRFMessage(ActionnableDevice* device, int data) const {
-	cout << "I activate via RF the outlet ";
-	cout << device->getId();
-	cout << " with data ";
-	cout << data;
-	cout << " (finalword = " << (device->getId() | data) << ")" << endl;
+	logMessage( LOG_DEBUG, "I activate via RF the outlet %d with data %d (finalwork = %d)", device->getId(), data, (device->getId() + data));
 
 #ifdef WIRINGPI
-	if ( this->wirelessModule != NULL ) this->wirelessModule->sendMessage(device->getId() | data);
+	if ( this->wirelessModule != NULL ) this->wirelessModule->sendMessage(device->getId() + data);
 #else
-	if ( this->rf433Module != NULL ) this->rf433Module->sendMessage(device->getId() | data);
+	if ( this->rf433Module != NULL ) this->rf433Module->sendMessage(device->getId() + data);
 #endif
 
 
@@ -638,13 +670,13 @@ void AlarmSystem::sendRFMessage(ActionnableDevice* device, int data) const {
 
 void AlarmSystem::sendSMS(std::string message) const {
 	if ( gsmModule == NULL ) {
-		logMessage("I cannot send the message " + message + " to all phone numbers");
+		logMessage(LOG_ERR, "I cannot send the message %s to all phone numbers", message.c_str());
 		return;
 	}
-	logMessage("I send a message " + message + " to all phone numbers");
+	logMessage(LOG_NOTICE, "I send the message %s to all phone numbers", message.c_str());
 	for(auto phone : getPhones()) {
-		if ( !gsmModule->sendMessage(phone, message) ) {
-			logMessage("Sending message failed");
+		if ( !gsmModule->sendUnicodeMessage(phone, message) ) {
+			logMessage(LOG_ERR, "Sending message failed");
 		}
 	}
 
@@ -657,7 +689,7 @@ void AlarmSystem::sendSMS(std::string message) const {
 }
 
 void AlarmSystem::callPhones() const {
-	logMessage("I call all phone numbers");
+	logMessage(LOG_NOTICE, "I call all phone numbers");
 }
 
 const std::map<int, time_t> AlarmSystem::getDetectedDevices() const {
@@ -688,7 +720,7 @@ void AlarmSystem::removeProperty(Property* toRemove) {
 
 void AlarmSystem::simulateSignalReceived(std::string data) {
 
-	std::cout << "Simulating device : " << data << std::endl;
+	logMessage(LOG_DEBUG, "Simulating device : %s", data.c_str());
 	int v = atoi(data.c_str());
 	std::thread(&AlarmSystem::onSignalReceived, this, v).detach();
 
@@ -711,46 +743,76 @@ void AlarmSystem::onIncomingCall(std::string callingNumber) {
 
 void AlarmSystem::onSignalReceived(int data) {
 	Device* dev = getDevice(data);
-	std::cout << "Message Received " << std::bitset<32>(data) << std::endl;
+	std::string msg;
+
+	msg = "Message received " + std::bitset<32>(data).to_string();
+	logMessage( LOG_NOTICE, msg.c_str());
 
 	if ( isConfigMode() ) {
 		if ( dev == NULL ) {
 			detectedDevicesMutex.lock();
 			detectedDevices[data] = time(0);
-			std::cout << "Creating device  " << std::bitset<32>(data) << std::endl;
+			msg = "Creating temp device " + std::bitset<32>(data).to_string();
+			logMessage( LOG_NOTICE, msg.c_str());
 			detectedDevicesMutex.unlock();
 		}
 	} else {
 		Mode *currentMode = this->getMode(activeMode());
-		if ( currentMode->getType() != ModeType::Inactive ) {
-			if ( dev != NULL ) {
-				std::cout << "Device found     : " << std::bitset<32>(dev->getId()) << " " << dev->getDescription() << std::endl;
-				std::tuple<Device*, std::string> key = std::make_tuple(dev, currentMode->getName());
-				Action* toExecute = this->devicesModesActionsAssociations[key];
-				if ( toExecute != NULL ) {
+		if ( dev != NULL ) {
+			msg = "Device found " + std::bitset<32>(data).to_string() + " " + dev->getDescription();
+			logMessage( LOG_NOTICE, msg.c_str());
+			std::tuple<int, std::string> key = std::make_tuple(dev->getId(), currentMode->getName());
+			Action* toExecute = getAction(this->devicesModesActionsAssociations[key]);
+			if ( toExecute != NULL ) {
 //					Mode* mode = getMode(currentMode);
-					actionThreadsMutex.lock();
+//				actionThreadsMutex.lock();
 //					std::thread *t = NULL;
-					actionThreads.push_back(/*t = */new std::thread([=]{
-						Action* a = toExecute;
-						std::cout << "Start thread" << std::endl;
-						while ( a != NULL && !mustStopActionThreads() ) {
-							std::cout << "Executing " << a->getName() << std::endl;
+
+//				actionThreads.push_back(/*t = */new std::thread([this, key, dev, currentMode]{
+				this->nbActionThreads++;
+				std::thread([this, key, dev, currentMode, toExecute]{
+					std::string aName = this->devicesModesActionsAssociations[key];
+					Action* a = getAction(aName);
+					logMessage( LOG_NOTICE, "Start action thread %s | %s | %s", aName.c_str(), toExecute->getName().c_str(), a->getName().c_str());
+					std::vector<std::thread*> aSyncThreads;
+					while ( a != NULL && !mustStopActionThreads() ) {
+						if ( a->isSynchronous() ) {
+							logMessage( LOG_NOTICE, "Executing action %s", a->getName().c_str());
 							a->execute(dev, currentMode);
-							a = a->getNextAction();
+						} else {
+//							actionThreads.push_back( new std::thread([=]{
+								aSyncThreads.push_back(new std::thread([=]{
+									logMessage( LOG_NOTICE, "Executing asynchronous action %s", a->getName().c_str());
+									a->execute( dev, currentMode);
+								}));
+//								std::lock_guard<std::mutex> lk(actionThreadsMutex);
+//								nbActionThreads++;
+//								cv.notify_one();
+//							}));
 						}
+						a = a->getNextAction();
+					}
 
-						std::lock_guard<std::mutex> lk(actionThreadsMutex);
-						nbActionThreads++;
-						cv.notify_one();
+					for(std::thread* t : aSyncThreads) {
+						t->join();
+					}
+					logMessage( LOG_NOTICE, "Ending action thread");
+//					std::lock_guard<std::mutex> lk(actionThreadsMutex);
+//					cv.notify_one();
+					logMessage( LOG_NOTICE, "Action thread ended");
+					this->nbActionThreads--;
+					if ( nbActionThreads <= 0 ) {
+						nbActionThreads = 0;
+						bMustStopActionThreads = false;
+					}
+				}).detach();
+//				}));
+//				actionThreadsMutex.unlock();
 
-					}));
-					actionThreadsMutex.unlock();
-
-				}
-			} else {
-				cout << "Device not found : " << std::bitset<32>(data) << endl;
 			}
+		} else {
+			msg = "Device not found : " + std::bitset<32>(data).to_string();
+			logMessage( LOG_NOTICE, msg.c_str());
 		}
 	}
 }
@@ -807,10 +869,17 @@ std::vector<std::string> AlarmSystem::ipAddresses() const {
 	return wifi.ipAddresses();
 }
 
-int AlarmSystem::isConnectedToNetwork() const {
+bool AlarmSystem::isConnectedToNetwork() const {
 	return wifi.isConnectedToNetwork();
 }
 
+void AlarmSystem::addNetworkListener(NetworkListener* listener) {
+	wifi.addListener(listener);
+}
+
+void AlarmSystem::removeNetworkListener(NetworkListener* listener) {
+	wifi.removeListener(listener);
+}
 
 std::string AlarmSystem::getVersion() const {
 	return VERSION;

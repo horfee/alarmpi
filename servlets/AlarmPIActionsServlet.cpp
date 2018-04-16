@@ -18,7 +18,9 @@
 #include "../httpserver/HTTPRequest.h"
 #include "../httpserver/HTTPResponse.h"
 #include "../json/json.h"
-#include "../StringUtils.h"
+#include "../Utils.h"
+#include "../AlarmSystemDAO.h"
+#include "../DAOFactory.h"
 
 namespace alarmpi {
 
@@ -32,6 +34,12 @@ AlarmPIActionsServlet::AlarmPIActionsServlet(AlarmSystem *system): AlarmPIServle
 		int valueToSend = v["value"].asInt();
 		std::string targetIds(trim( v["targetIds"].asString()));
 		return new ActivateAction(id, valueToSend, targetIds, synchronous);
+	};
+	actionCreators["ACTIVATEMODEACTION"] = [](Json::Value v) {
+		std::string id(trim(v["name"].asString()));
+//		bool synchronous = v["synchronous"].asBool();
+		std::string mode = v["mode"].asString();
+		return new ActivateModeAction(id, mode);
 	};
 	actionCreators["CALLPHONEACTION"] = [](Json::Value v) {
 		std::string id(trim(v["name"].asString()));
@@ -156,7 +164,7 @@ void AlarmPIActionsServlet::doPut(HTTPRequest& request, HTTPResponse& response) 
 		} else {
 
 			Action* action = system->getAction(idToAlter);
-			Action* origAction = action;
+//			Action* origAction = action;
 
 			if ( action == NULL ) {
 				res["error"] = "L'action " + idToAlter + " n'existe pas.";
@@ -175,25 +183,40 @@ void AlarmPIActionsServlet::doPut(HTTPRequest& request, HTTPResponse& response) 
 						response << res;
 						response.setCode(httpBadRequest);
 					} else {
-						action = creator(value);
-						for(auto it : system->getActions()) {
-							if ( it->getNextAction() == origAction ) {
-								it->setNextAction(action);
+						std::vector<std::tuple<int, std::string>> assocs;
+						for(Association a : system->getAssociations()) {
+							if ( std::get<2>(a) == action ) {
+								std::tuple<int, std::string> t = std::make_tuple(std::get<0>(a)->getId(), std::get<1>(a)->getName());
+								assocs.push_back(t);
 							}
 						}
-						for(auto it : system->getAssociations()) {
-							Device* d = std::get<0>(it);
-							Mode* m = std::get<1>(it);
-							Action* tmp = std::get<2>(it);
-							if ( tmp == origAction ) system->associateActionAndMode(d, action, m);
+
+						std::vector<Action*> chainedActions;
+						for(auto it : system->getActions()) {
+							if ( it->getNextAction() == action ) {
+								chainedActions.push_back(it);
+							}
 						}
-						system->removeAction(origAction);
+						system->removeAction(action);
+						delete action;
+
+						action = creator(value);
 						action->setNextAction(nextAction);
+						for(Action* a : chainedActions) {
+							a->setNextAction(action);
+						}
 						system->addAction(action);
+						for(std::tuple<int, std::string> t : assocs) {
+							int devId = std::get<0>(t);
+							std::string m = std::get<1>(t);
+							system->associateActionAndMode(system->getDevice(devId), action, system->getMode(m));
+						}
+						for(Action* a : chainedActions) {
+							DAOFactory::getInstance()->getDAO()->persistAction(a);
+						}
 						response.setCode(httpOK);
 						value = action->toJSON();
 						response << value;
-						delete origAction;
 					}
 
 

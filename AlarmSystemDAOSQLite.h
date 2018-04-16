@@ -76,6 +76,7 @@ private:
 	bool persistMagneticDevice(Device* dev);
 
 	bool existsAction(Action* action);
+	bool updateActivateModeAction(Action* action);
 	bool updateRingBellAction(Action* action);
 	bool updateActivateAction(Action* action);
 	bool updateDelayAction(Action* action);
@@ -84,12 +85,14 @@ private:
 
 	bool persistRingBellAction(Action* action);
 	bool persistActivateAction(Action* action);
+	bool persistActivateModeAction(Action* action);
 	bool persistDelayAction(Action* action);
 	bool persistSendMessageAction(Action* action);
 	bool persistCallPhoneAction(Action* action);
 
 	std::map<Action*, std::string> loadActivateActions() const;
 	std::map<Action*, std::string> loadDelayActions() const;
+	std::map<Action*, std::string> loadActivateModeActions() const;
 	std::map<Action*, std::string> loadCallPhonesActions() const;
 	std::map<Action*, std::string> loadRingBellActions() const;
 	std::map<Action*, std::string> loadSendMessageActions() const;

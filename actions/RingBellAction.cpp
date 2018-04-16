@@ -11,7 +11,10 @@
 #include <stdarg.h>
 #include <unistd.h>
 #include <algorithm>
-#include "../StringUtils.h"
+#include <time.h>
+#include "../Utils.h"
+
+#define NB_REPEAT	3
 
 namespace alarmpi {
 
@@ -54,13 +57,23 @@ void RingBellAction::execute(Device* device, Mode* mode) {
 	}
 	for(Device* dev : devices) {
 		if ( typeid(*dev) == typeid (BellDevice) ) {
-			this->system->sendRFMessage((BellDevice*)dev,((BellDevice*)dev)->getOnValue());
+			for( int i = 0; i < NB_REPEAT; i++)
+				this->system->sendRFMessage((BellDevice*)dev,((BellDevice*)dev)->getOnValue());
 		}
 	}
-	usleep(duration * 1000 * 60);
+
+	int uduration = duration * 1000;
+	int step = uduration / 100;
+
+	for(int i = uduration; i >= 0 ; i -= step) {
+		if ( system->mustStopActionThreads() ) return;
+		std::this_thread::sleep_for(std::chrono::milliseconds(step));
+	}
+
 	for(Device* dev : devices) {
 		if ( typeid(*dev) == typeid (BellDevice) ) {
-			this->system->sendRFMessage((BellDevice*)dev,((BellDevice*)dev)->getOffValue());
+			for( int i = 0; i < NB_REPEAT; i++)
+				this->system->sendRFMessage((BellDevice*)dev,((BellDevice*)dev)->getOffValue());
 		}
 	}
 }

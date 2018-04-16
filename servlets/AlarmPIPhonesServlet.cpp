@@ -7,6 +7,7 @@
 
 #include "AlarmPIPhonesServlet.h"
 #include <regex>
+#include "../Utils.h"
 
 namespace alarmpi {
 
@@ -68,7 +69,8 @@ void AlarmPIPhonesServlet::doPost(HTTPRequest& request, HTTPResponse& response) 
 				} else {
 					std::string phoneNumber = value["phoneNumber"].asString();
 					int index = value["index"].asInt();
-					std::cout << "post : Index recu : " + std::to_string(index) << std::endl;
+
+					logMessage( LOG_DEBUG, "Post : Index recu : %d", index);
 					system->addPhoneNumber(phoneNumber, index - 1);
 					response.setCode(httpOK);
 					res["phoneNumber"] = phoneNumber;
@@ -109,7 +111,7 @@ void AlarmPIPhonesServlet::doPut(HTTPRequest& request, HTTPResponse& response) {
 				} else {
 					std::string phoneNumber = value["phoneNumber"].asString();
 					int index = value["index"].asInt();
-					std::cout << "put Index recu : " + std::to_string(index) << std::endl;
+					logMessage( LOG_DEBUG, "Put : Index recu : %d", index);
 					system->addPhoneNumber(phoneNumber, index - 1);
 					response.setCode(httpOK);
 					res["phoneNumber"] = phoneNumber;

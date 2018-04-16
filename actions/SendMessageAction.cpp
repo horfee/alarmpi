@@ -27,7 +27,7 @@ void SendMessageAction::execute(Device* device, Mode* mode) {
 //	if ( !stopAsked() ) {
 //		setRunning();
 		size_t pos = message.find("$device");
-		std::string msg;
+		std::string msg = message;
 		if ( pos != std::string::npos ) {
 			msg = message.substr(0, pos) + device->getDescription() + message.substr(pos + std::string("$device").length());
 		}
@@ -48,6 +48,27 @@ void SendMessageAction::execute(Device* device, Mode* mode) {
 			char mbstr[100];
 			std::strftime(mbstr, sizeof(mbstr), "%x", std::localtime(&t));
 			msg = msg.substr(0, pos) + std::string(mbstr) + msg.substr(pos + std::string("$date").length());
+		}
+
+		pos = msg.find("$action.");
+		if ( pos != std::string::npos ) {
+			size_t pos2 = msg.find(" ", pos + 8);
+			std::string val = msg.substr(pos + 8, pos2 - (pos + 8));
+			Json::Value v = this->toJSON();
+			Json::Value v2 = v[val];
+			std::string res;
+			if ( v2.type() == Json::ValueType::stringValue ) {
+				res = v2.asString();
+			} else if ( v2.type() == Json::ValueType::intValue ) {
+				res = std::to_string(v2.asInt());
+			} else if ( v2.type() == Json::ValueType::realValue ) {
+				res = std::to_string(v2.asDouble());
+			} else if ( v2.type() == Json::ValueType::booleanValue ) {
+				res = std::to_string(v2.asBool());
+			} else if ( v2.type() == Json::ValueType::uintValue ) {
+				res = std::to_string(v2.asUInt());
+			}
+			msg = msg.substr(0, pos) + res + msg.substr(pos2);
 		}
 
 //		if ( !stopAsked() ) {

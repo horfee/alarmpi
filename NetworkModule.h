@@ -10,7 +10,13 @@
 
 #include <string>
 #include <vector>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <atomic>
 #include "Singleton.h"
+
+#define	DEFAULT_ESSID	"AlarmPI"
 
 namespace alarmpi {
 
@@ -35,6 +41,9 @@ public:
 	NetworkModule();
 	virtual ~NetworkModule();
 
+	void startDeamondWithDefaultPassword(std::string defaultPassword);
+
+	void stopDeamon();
 
 	std::vector<WifiDesc> listWifi() const;
 
@@ -42,15 +51,27 @@ public:
 
 	std::vector<std::string> ipAddresses() const;
 
-	int isConnectedToNetwork() const;
+	bool isConnectedToNetwork() const;
 
 	bool connectToWifi(std::string essid, std::string password) const;
 
 	bool createAccessPoint(std::string essid, std::string password);
 
+	void addListener(NetworkListener *listener);
+
+	void removeListener(NetworkListener *listener);
 private:
 
+	void deamonThreadCallback(std::string password);
 
+	std::thread* deamonThread;
+
+	std::atomic<bool> askedToStop;
+
+	std::mutex mutex;
+	std::condition_variable conditionVariable;
+
+	std::vector<NetworkListener*> listeners;
 
 };
 

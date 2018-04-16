@@ -1,13 +1,14 @@
 /*
- * StringUtils.cpp
+ * Utils.cpp
  *
  *  Created on: 6 avr. 2017
  *      Author: horfee
  */
 
-#include "StringUtils.h"
+#include "Utils.h"
 #include <algorithm>
 #include <iostream>
+#include <syslog.h>
 
 std::string trim(const std::string &s)
 {
@@ -44,4 +45,26 @@ std::vector<std::string> split(std::string text, std::initializer_list<std::stri
 	}
 
 	return res;
+}
+
+
+std::string urlDecode(std::string str) {
+    std::string ret;
+    char ch;
+    int i, ii, len = str.length();
+
+    for (i=0; i < len; i++){
+        if(str[i] != '%'){
+            if(str[i] == '+')
+                ret += ' ';
+            else
+                ret += str[i];
+        }else{
+            sscanf(str.substr(i + 1, 2).c_str(), "%x", &ii);
+            ch = static_cast<char>(ii);
+            ret += ch;
+            i = i + 2;
+        }
+    }
+    return ret;
 }
