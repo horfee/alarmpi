@@ -70,8 +70,8 @@ void AlarmPISystemServlet::doPost(HTTPRequest& request, HTTPResponse& response) 
 	} else {
 		std::string encPassword = request.getHeader("password");//value["password"].asString();
 
-		logMessage( LOG_DEBUG, "Action   : %s", action.c_str());
-		logMessage( LOG_DEBUG, "Password : %s", encPassword.c_str());
+		//logMessage( LOG_DEBUG, "Action   : %s", action.c_str());
+		//logMessage( LOG_DEBUG, "Password : %s", encPassword.c_str());
 
 		if ( !system->testPassword(encPassword) ) {
 			response.setCode(httpUnauthorized);
@@ -104,6 +104,11 @@ void AlarmPISystemServlet::doPost(HTTPRequest& request, HTTPResponse& response) 
 			std::string ssid = value["ssid"].asString();
 			std::string wifiPassword = value["password"].asString();
 			system->connectToWifi(ssid, wifiPassword);
+		} else if ( action == "createAP") {
+			std::string ssid = value["ssid"].asString();
+			if ( ssid == "" ) ssid = "Alarm-PI";
+			std::string password = value["password"].asString();
+			system->createAccessPoint(ssid, password);
 		}
 	}
 

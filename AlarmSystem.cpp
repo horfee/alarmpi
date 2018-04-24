@@ -86,7 +86,7 @@ AlarmSystem::AlarmSystem() {
 	}
 #endif
 
-	wifi.startDeamondWithDefaultPassword(this->getProperty(PROPERTY_ACCESS_POINT_PASS)->getStringValue());
+//	startDeamondWithDefaultPassword(this->getProperty(PROPERTY_ACCESS_POINT_PASS)->getStringValue());
 //	detectedDevices[12345678] = time(0);
 }
 
@@ -445,6 +445,7 @@ Mode* AlarmSystem::getInactiveMode() const {
 }
 
 void AlarmSystem::addMode(Mode* mode) { //string mode, string description) {
+	logMessage( LOG_DEBUG, "Adding a mode : " + mode->getName());
 	if ( !isConfigMode() ) throw NotInConfigModeException();
 	if ( mode == NULL ) return;
 
@@ -455,6 +456,7 @@ void AlarmSystem::addMode(Mode* mode) { //string mode, string description) {
 }
 
 void AlarmSystem::removeMode(Mode* mode) { //string mode) {
+	logMessage( LOG_DEBUG, "Removing a mode : " + mode->getName());
 	if ( !isConfigMode() ) throw NotInConfigModeException();
 	if( mode->getType() != ModeType::Active ) throw InvalidModeException();
 	if ( mode == NULL ) return;
@@ -475,6 +477,7 @@ void AlarmSystem::removeMode(Mode* mode) { //string mode) {
 }
 
 void AlarmSystem::removeAction(Action* toRemove) {
+	logMessage( LOG_DEBUG, "Removing an action : " + toRemove->getName());
 	if ( !isConfigMode() ) throw NotInConfigModeException();
 	if ( toRemove == NULL ) return;
 
@@ -495,6 +498,7 @@ void AlarmSystem::removeAction(Action* toRemove) {
 }
 
 void AlarmSystem::addAction(Action* toAdd) {
+	logMessage( LOG_DEBUG, "Adding and action: " + toAdd->getName());
 	if ( !isConfigMode() ) throw NotInConfigModeException();
 	if ( toAdd == NULL ) return;
 	if ( getAction(toAdd->getName()) != NULL ) throw ActionAlreadyExistsException();
@@ -514,6 +518,7 @@ Action* AlarmSystem::getAssociation(int deviceId, std::string mode) const {
 }
 
 void AlarmSystem::addDevice(Device* toAdd) {
+	logMessage( LOG_DEBUG, "Adding a device : " + toAdd->getId());
 	if ( !isConfigMode() ) throw NotInConfigModeException();
 	if ( toAdd == NULL ) return;
 	if ( getDevice(toAdd->getId()) != NULL ) throw AlarmDeviceAlreadyExistsException();
@@ -532,6 +537,7 @@ void AlarmSystem::addDevice(Device* toAdd) {
 }
 
 void AlarmSystem::removeDevice(Device* toRemove) {
+	logMessage( LOG_DEBUG, "Removing a device : " + toRemove->getId());
 	if ( !isConfigMode() ) throw NotInConfigModeException();
 	if ( toRemove == NULL ) return;
 
@@ -701,6 +707,7 @@ const std::vector<Device*> AlarmSystem::getDevices() const {
 }
 
 void AlarmSystem::addProperty(Property* toAdd) {
+	logMessage( LOG_DEBUG, "Adding a property : " + toAdd->getName());
 	if ( !isConfigMode() ) throw NotInConfigModeException();
 	if ( toAdd == NULL ) return;
 
@@ -711,6 +718,7 @@ void AlarmSystem::addProperty(Property* toAdd) {
 
 }
 void AlarmSystem::removeProperty(Property* toRemove) {
+	logMessage( LOG_DEBUG, "Removing a property : " + toRemove->getName());
 	if ( !isConfigMode() ) throw NotInConfigModeException();
 	if ( toRemove == NULL ) return;
 
@@ -848,38 +856,38 @@ int AlarmSystem::getPhone(std::string phone) const {
 const std::vector<Action*> AlarmSystem::getActions() const {
 	return actions;
 }
-
-std::vector<alarmpi::WifiDesc> AlarmSystem::listWifi() const {
-	return wifi.listWifi();
-}
-
-std::string AlarmSystem::getCurrentESSI() const {
-	return wifi.getCurrentESSI();
-}
-
-bool AlarmSystem::connectToWifi(std::string essid, std::string password) const {
-	return wifi.connectToWifi(essid, password);
-}
-
-bool AlarmSystem::createAccessPoint(std::string essid, std::string password) {
-	return wifi.createAccessPoint(essid, password);
-}
-
-std::vector<std::string> AlarmSystem::ipAddresses() const {
-	return wifi.ipAddresses();
-}
-
-bool AlarmSystem::isConnectedToNetwork() const {
-	return wifi.isConnectedToNetwork();
-}
-
-void AlarmSystem::addNetworkListener(NetworkListener* listener) {
-	wifi.addListener(listener);
-}
-
-void AlarmSystem::removeNetworkListener(NetworkListener* listener) {
-	wifi.removeListener(listener);
-}
+//
+//std::vector<alarmpi::WifiDesc> AlarmSystem::listWifi() const {
+//	return wifi.listWifi();
+//}
+//
+//std::string AlarmSystem::getCurrentESSI() const {
+//	return wifi.getCurrentESSI();
+//}
+//
+//bool AlarmSystem::connectToWifi(std::string essid, std::string password) const {
+//	return wifi.connectToWifi(essid, password);
+//}
+//
+//bool AlarmSystem::createAccessPoint(std::string essid, std::string password) {
+//	return wifi.createAccessPoint(essid, password);
+//}
+//
+//std::vector<std::string> AlarmSystem::ipAddresses() const {
+//	return wifi.ipAddresses();
+//}
+//
+//bool AlarmSystem::isConnectedToNetwork() const {
+//	return wifi.isConnectedToNetwork();
+//}
+//
+//void AlarmSystem::addNetworkListener(NetworkListener* listener) {
+//	wifi.addListener(listener);
+//}
+//
+//void AlarmSystem::removeNetworkListener(NetworkListener* listener) {
+//	wifi.removeListener(listener);
+//}
 
 std::string AlarmSystem::getVersion() const {
 	return VERSION;

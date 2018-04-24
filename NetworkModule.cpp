@@ -137,21 +137,7 @@ bool NetworkModule::connectToWifi(std::string essid, std::string password) const
 	for(auto l : this->listeners) {
 		l->onConnectionStateChanged(this->isConnectedToNetwork());
 	}
-	//notifyListeners(*this);
-	//sudo su -c 'wpa_supplicant -D nl80211,wext -i wlan0 -c <(wpa_passphrase "Snubbyland" "Batrie59")'
-	/*
-	std::string wpaFile = "/etc/wpa_supplicant/wpa_supplicant.conf";
-	logMessage( LOG_DEBUG, exec("rm " + wpaFile));
-	logMessage( LOG_DEBUG, exec("rm " + wpaFile));
-	logMessage( LOG_DEBUG, exec("echo country=GB>>" + wpaFile));
-	logMessage( LOG_DEBUG, exec("echo ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev>>" + wpaFile));
-	logMessage( LOG_DEBUG, exec("echo update_config=1>>" + wpaFile));
-	logMessage( LOG_DEBUG, exec("echo>>" + wpaFile));
-	logMessage( LOG_DEBUG, exec("wpa_passphrase  \"" + essid + "\" \"" + password + "\" | sed \"/#psk=.* /d\">>" + wpaFile));
-	logMessage( LOG_DEBUG, exec("systemctl start wpa_supplicant"));
-	logMessage( LOG_DEBUG, exec("ifdown " + getWifiInterface()));
-	logMessage( LOG_DEBUG, exec("ifup " + getWifiInterface()));
-	*/
+
 	return true;
 }
 
@@ -161,32 +147,7 @@ bool NetworkModule::createAccessPoint(std::string essid, std::string password) {
 	for(auto l : this->listeners) {
 		l->onConnectionStateChanged(this->isConnectedToNetwork());
 	}
-	//notifyListeners(*this);
 
-	/*
-	logMessage( LOG_DEBUG, exec("systemctl stop wpa_supplicant"));
-	logMessage( LOG_DEBUG, exec("ifconfig " + getWifiInterface() + " down"));
-	logMessage( LOG_DEBUG, exec("echo \"denyinterfaces " +getWifiInterface() + "\" >> /etc/dhcpcd.conf"));
-	logMessage( LOG_DEBUG, exec("systemctl restart dhcpcd"));
-	logMessage( LOG_DEBUG, exec("ifconfig " + getWifiInterface() + " 192.168.0.1 netmask 255.255.255.0 up"));
-	logMessage( LOG_DEBUG, exec(
-			"echo -e \"interface=" + getWifiInterface() + "\n"
-			"driver=nl80211\n"
-			"ssid=" + essid + "\n"
-			"hw_mode=g\n"
-			"ieee80211n=1\n"
-			"wmm_enabled=1\n"
-			"macaddr_acl=0\n"
-			"channel=0"
-			"auth_algs=1\n"
-			"ignore_broadcast_ssid=0\n"
-			"wpa=2\n"
-			"wpa_key_mgmt=WPA-PSK\n"
-			"wpa_passphrase=" + password + "\n"
-			"rsn_pairwise=CCMP\" > /etc/hostapd/hostapd.conf"));
-
-	logMessage( LOG_DEBUG, exec("hostapd -dd -B /etc/hostapd/hostapd.conf"));
-	*/
 	return true;
 }
 

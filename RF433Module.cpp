@@ -90,14 +90,11 @@ void RF433Module::start() {
 	if ( started ) {
 		logMessage(LOG_DEBUG, "PIGPIO successfully started");
 		Callback<void(_433D_rx_data_t)>::func = std::bind(&RF433Module::cbf, this, std::placeholders::_1);
-	    // Convert callback-function to c-pointer.
+		// Convert callback-function to c-pointer.
 	    void (*c_func)(_433D_rx_data_t) = static_cast<decltype(c_func)>(Callback<void(_433D_rx_data_t)>::callback);
-
 	    rx = _433D_rx(pi, optRx, c_func);
-
 		_433D_rx_set_bits(rx, optMinBits, optMaxBits);
 		_433D_rx_set_glitch(rx, optGlitch);
-
 		tx = _433D_tx(pi, optTx);
 		_433D_tx_set_bits(tx, optBits);
 		_433D_tx_set_repeats(tx, optRepeats);

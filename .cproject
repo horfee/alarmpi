@@ -30,7 +30,6 @@
 								</option>
 								<option id="gnu.c.compiler.option.preprocessor.def.symbols.419475058" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="RPI"/>
-									<listOptionValue builtIn="false" value="WIRINGPI"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.2077974931" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
@@ -40,7 +39,6 @@
 								</option>
 								<option id="gnu.cpp.compiler.option.preprocessor.def.346846175" name="Defined symbols (-D)" superClass="gnu.cpp.compiler.option.preprocessor.def" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="RPI"/>
-									<listOptionValue builtIn="false" value="WIRINGPI"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.cpp.compiler.input.1298170698" superClass="cdt.managedbuild.tool.gnu.cpp.compiler.input"/>
 							</tool>

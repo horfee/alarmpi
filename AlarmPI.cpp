@@ -280,7 +280,7 @@ int main(int argc, char* argv[]) {
 
 	};
 
-	alarmSystem->addNetworkListener(new InnerNetworkListener(server));
+	alarmSystem->addListener(new InnerNetworkListener(server));
 	std::string sysAvailableOn("System available on : \n");
 	int portNumber = alarmSystem->getProperty(PROPERTY_WEBSERVER_PORT)->getIntValue();
 	for(std::string s : alarmSystem->ipAddresses()) {

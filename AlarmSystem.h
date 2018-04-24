@@ -43,7 +43,7 @@ class UnknownModeException: public exception {};
 
 typedef std::tuple<Device*, Mode*, Action*> Association;
 
-class AlarmSystem: private SIM800ModuleListener,
+class AlarmSystem: public NetworkModule, private SIM800ModuleListener,
 #ifdef WIRINGPI
 		private RCMessageListener
 #else
@@ -89,14 +89,14 @@ public:
 	void addProperty(Property* toAdd);
 	void removeProperty(Property* toRemove);
 
-	std::vector<alarmpi::WifiDesc> listWifi() const;
-	std::string getCurrentESSI() const;
-	bool connectToWifi(std::string essid, std::string password) const;
-	bool createAccessPoint(std::string essid, std::string password);
-	std::vector<std::string> ipAddresses() const;
-	bool isConnectedToNetwork() const;
-	void addNetworkListener(NetworkListener* listener);
-	void removeNetworkListener(NetworkListener* listener);
+//	std::vector<alarmpi::WifiDesc> listWifi() const;
+//	std::string getCurrentESSI() const;
+//	bool connectToWifi(std::string essid, std::string password) const;
+//	bool createAccessPoint(std::string essid, std::string password);
+//	std::vector<std::string> ipAddresses() const;
+//	bool isConnectedToNetwork() const;
+//	void addNetworkListener(NetworkListener* listener);
+//	void removeNetworkListener(NetworkListener* listener);
 
 	/*********** End of available when in config mode */
 

@@ -10,17 +10,17 @@ ifdef WIRINGPI
 WIRINGPIFLAG = -DWIRINGPI
 endif
 
-override CFLAGS += -ggdb -std=c++0x -O0 -Wall -DRPI -DWIRINGPI -pthread -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)"
+override CFLAGS += -ggdb -std=c++0x -O0 -Wall $RPIFLAG $WIRINGPIFLAG -pthread -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)"
 
-#ifdef WIRINGPI
-LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl -lwiringPi
-#else
-#ifdef RPI
-#LIBS := -lssl -lpigpiod_if2 -lpigpio -levent -lpthread -lcrypto -lsqlite3 -ldl
-#else
-#LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl
-#endif
-#endif
+ifdef WIRINGPI
+	LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl -lwiringPi
+else
+	ifdef RPI
+		LIBS := -lssl -lpigpiod_if2 -lpigpio -levent -lpthread -lcrypto -lsqlite3 -ldl
+	else
+		LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl
+	endif
+endif
 
 #PREFIX  := 
 BINDIR = $(prefix)/bin
@@ -31,8 +31,8 @@ MANDIR = $(prefix)/man
 RM := rm -rf
 
 USEPIGPIO =
+
 CPP_SRCS += \
-TestRC.cpp \
 AlarmPI.cpp \
 AlarmSystem.cpp \
 AlarmSystemDAOSQLite.cpp \
@@ -82,7 +82,6 @@ actions/RingBellAction.cpp \
 actions/SendMessageAction.cpp 
 
 OBJS += \
-TestRC.o \
 AlarmPI.o \
 AlarmSystem.o \
 AlarmSystemDAOSQLite.o \
@@ -130,7 +129,6 @@ actions/SendMessageAction.o \
 json/jsoncpp.o 
 
 CPP_DEPS += \
-TestRC.d \
 AlarmPI.d \
 AlarmSystem.d \
 AlarmSystemDAOSQLite.d \
@@ -190,8 +188,7 @@ all: alarmPI
 %.o: %.cpp
 	$(CROSS_COMPILE)$(CXX) -c -I"$(HEADERSPATH)" $(CFLAGS) $^ -o $@
 
-
-
+	
 # Tool invocations
 alarmPI: $(OBJS)
 	@echo 'Building target: $@'
@@ -205,7 +202,9 @@ clean:
 
 
 install:	$(ALL)
-	install -m 0755 alarmPI           $(DESTDIR)$(BINDIR)
+	install -m 0755 alarmPI         	  $(DESTDIR)$(BINDIR)
+	install -m 0755 connectToWifi.sh      $(DESTDIR)$(BINDIR)
+	install -m 0755 createAP.sh           $(DESTDIR)$(BINDIR)
 
 .PHONY: all clean dependents
 .SECONDARY:
