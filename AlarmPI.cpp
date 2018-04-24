@@ -190,7 +190,7 @@ int main(int argc, char* argv[]) {
 
 	}
 	if ( res == PI_INIT_FAILED ) {
-		return 1;
+	//	return 1;
 	} else {
 		logMessage( LOG_NOTICE, "PIGPIO initialized successfully");
 	}

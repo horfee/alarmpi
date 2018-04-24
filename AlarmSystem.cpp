@@ -69,24 +69,55 @@ AlarmSystem::AlarmSystem() {
 	bMustStopActionThreads = false;
 	detectedDevicesCleanUpThread = new std::thread(&AlarmSystem::cleanUpDetectedDevices, this);
 
+	try {
+		Property* receivingPinProperty = getProperty(PROPERTY_RECEIVING_PIN);
+		Property* transmittingPinProperty = getProperty(PROPERTY_TRANSMITTING_PIN);
+
+		logMessage(LOG_NOTICE, "Creating RF module on pin rx=%d / tx=%d", receivingPinProperty->getIntValue(), transmittingPinProperty->getIntValue());
 #ifdef WIRINGPI
-	if ( this->wirelessModule != NULL  && !this->wirelessModule->isStarted() ) {
-		logMessage( LOG_NOTICE, "Activating wireless module");
-		try {
-
-			this->wirelessModule->start();
-		} catch (AlreadyRunningException &e) {
-
-		}
-	}
+		wirelessModule = new RCReceiverTransmitter(receivingPinProperty->getIntValue(), transmittingPinProperty->getIntValue());
+		wirelessModule->addListener(this);
+		logMessage( LOG_NOTICE, "Activating RF module");
+		wirelessModule->start();
 #else
-	if ( this->rf433Module != NULL && !this->rf433Module->isStarted() ) {
-		logMessage( LOG_NOTICE, "Activating wireless module");
-		this->rf433Module->start();
-	}
+		rf433Module = new RF433Module(receivingPinProperty->getIntValue(), transmittingPinProperty->getIntValue());
+		rf433Module->addListener(this);
+		logMessage( LOG_NOTICE, "Activating RF module");
+		rf433Module->start();
 #endif
 
-//	startDeamondWithDefaultPassword(this->getProperty(PROPERTY_ACCESS_POINT_PASS)->getStringValue());
+	} catch ( std::exception &e ) {
+#ifdef WIRINGPI
+		wirelessModule = NULL;
+#else
+		rf433Module = NULL;
+#endif
+		logMessage( LOG_ERR, "Error catched : %s", e.what());
+	}
+
+
+#ifdef RPI
+	try {
+		Property* sim800ResetPinProperty  = getProperty(PROPERTY_SIM800RESET_PIN);
+		Property* sim800FileStreamProperty  = getProperty(PROPERTY_SIM800STREAM);
+		Property* sim800BaudRateProperty  = getProperty(PROPERTY_SIM800RESET_PIN);
+
+		logMessage(LOG_NOTICE, "Creating gsm module on %s / pin %d", sim800FileStreamProperty->getStringValue().c_str(), sim800ResetPinProperty ->getIntValue());
+		gsmModule = new SIM800Module(sim800ResetPinProperty->getIntValue(), sim800FileStreamProperty->getStringValue(), sim800BaudRateProperty->getIntValue());
+		gsmModule->addListener(this);
+	} catch ( alarmpi::SIM800UARTException &e2 ) {
+		gsmModule = NULL;
+	} catch ( alarmpi::SIM800Exception &e3 ) {
+		gsmModule = NULL;
+	} catch ( std::runtime_error &re ) {
+		logMessage(LOG_CRIT, "Error : %s", re.what());
+	}
+#else
+	gsmModule = NULL;
+#endif
+
+
+	startDeamondWithDefaultPassword(this->getProperty(PROPERTY_ACCESS_POINT_PASS)->getStringValue());
 //	detectedDevices[12345678] = time(0);
 }
 
@@ -303,25 +334,6 @@ void AlarmSystem::loadConfiguration() {
 		dao->persistProperty(transmittingPinProperty);
 	}
 
-	try {
-		logMessage(LOG_NOTICE, "Creating RF module on pin %d / %d", receivingPinProperty->getIntValue(), transmittingPinProperty->getIntValue());
-#ifdef WIRINGPI
-		wirelessModule = new RCReceiverTransmitter(receivingPinProperty->getIntValue(), transmittingPinProperty->getIntValue());
-		wirelessModule->addListener(this);
-#else
-		rf433Module = new RF433Module(receivingPinProperty->getIntValue(), transmittingPinProperty->getIntValue());
-		rf433Module->addListener(this);
-#endif
-
-	} catch ( std::exception &e ) {
-#ifdef WIRINGPI
-		wirelessModule = NULL;
-#else
-		rf433Module = NULL;
-#endif
-		logMessage( LOG_ERR, "Error catched : %s", e.what());
-	}
-
 	if ( sim800ResetPinProperty == NULL ) {
 		sim800ResetPinProperty  = new Property(PROPERTY_SIM800RESET_PIN, PROPERTY_SIM800RESET_PIN_DESCRIPTION, DEFAULT_VALUE_SIM800RESET_PIN);
 		properties.push_back(sim800ResetPinProperty );
@@ -339,22 +351,6 @@ void AlarmSystem::loadConfiguration() {
 		properties.push_back(sim800BaudRateProperty );
 		dao->persistProperty(sim800BaudRateProperty );
 	}
-
-#ifdef RPI
-	try {
-		logMessage(LOG_NOTICE, "Creating gsm module on %s / pin %d", sim800FileStreamProperty->getStringValue().c_str(), sim800ResetPinProperty ->getIntValue());
-		gsmModule = new SIM800Module(sim800ResetPinProperty->getIntValue(), sim800FileStreamProperty->getStringValue(), sim800BaudRateProperty->getIntValue());
-		gsmModule->addListener(this);
-	} catch ( alarmpi::SIM800UARTException &e2 ) {
-		gsmModule = NULL;
-	} catch ( alarmpi::SIM800Exception &e3 ) {
-		gsmModule = NULL;
-	} catch ( std::runtime_error &re ) {
-		logMessage(LOG_CRIT, "Error : %s", re.what());
-	}
-#else
-	gsmModule = NULL;
-#endif
 
 	Property* lastModeProperty = getProperty(PROPERTY_CURRENT_MODE);
 	if ( lastModeProperty == NULL ) {

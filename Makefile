@@ -1,31 +1,25 @@
 #CC           = $(CROSS_COMPILE)g++
 DESTDIR      = $(prefix)
 
+LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl
 
 ifdef RPI
-RPIFLAG = -DRPI
+RPIFLAG = -DRPI=1
+LIBS := -lssl -lpigpiod_if2 -lpigpio -levent -lpthread -lcrypto -lsqlite3 -ldl
 endif
 
 ifdef WIRINGPI
-WIRINGPIFLAG = -DWIRINGPI
+WIRINGPIFLAG = -DWIRINGPI=1
+LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl -lwiringPi
 endif
 
 override CFLAGS += -ggdb -std=c++0x -O0 -Wall $(RPIFLAG) $(WIRINGPIFLAG) -pthread -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)"
 
-ifdef WIRINGPI
-	LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl -lwiringPi
-else
-	ifdef RPI
-		LIBS := -lssl -lpigpiod_if2 -lpigpio -levent -lpthread -lcrypto -lsqlite3 -ldl
-	else
-		LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl
-	endif
-endif
-
-#PREFIX  := 
+#PREFIX  :=
+DESTDIR=/Volumes/AlarmPI/workspace/alarmpi/lib
 BINDIR = $(prefix)/bin
 HEADERS += $(DESTDIR)/usr/include
-LIBDIR += $(DESTDIR)/lib
+LIBDIR += $(DESTDIR)/usr/lib
 MANDIR = $(prefix)/man
 
 RM := rm -rf
@@ -186,13 +180,14 @@ all: alarmPI
 
 
 %.o: %.cpp
-	$(CROSS_COMPILE)$(CXX) -c -I"$(HEADERS)" $(CFLAGS) $^ -o $@
+	$(CROSS_COMPILE)$(CC) -c -I"$(HEADERS)" $(CFLAGS) $^ -o $@
 
 	
 # Tool invocations
 alarmPI: $(OBJS)
 	@echo 'Building target: $@'
-	$(CROSS_COMPILE)$(CXX) -o "alarmPI" $(OBJS) $(USER_OBJS) $(LIBS) $(CC_LIBS)
+	@echo 'Library to use :  $(LIBS)'
+	$(CROSS_COMPILE)$(CC) -o "alarmPI" $(OBJS) $(USER_OBJS) $(LIBS) $(CC_LIBS) -L"$(LIBDIR)"
 	@echo 'Finished building target: $@'
 
 # Other Targets

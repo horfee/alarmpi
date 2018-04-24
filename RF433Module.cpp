@@ -8,13 +8,13 @@
 #include "RF433Module.h"
 #include <stdlib.h>
 #include <algorithm>
-#include <pigpiod_if2.h>
 #include <functional>
 #include <iostream>
 #include "Utils.h"
 
 #ifdef RPI
 #ifndef WIRINGPI
+#include <pigpiod_if2.h>
 
 namespace alarmpi {
 
