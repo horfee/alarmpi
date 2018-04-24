@@ -10,7 +10,7 @@ ifdef WIRINGPI
 WIRINGPIFLAG = -DWIRINGPI
 endif
 
-override CFLAGS += -ggdb -std=c++0x -O0 -Wall $RPIFLAG $WIRINGPIFLAG -pthread -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)"
+override CFLAGS += -ggdb -std=c++0x -O0 -Wall $(RPIFLAG) $(WIRINGPIFLAG) -pthread -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)"
 
 ifdef WIRINGPI
 	LIBS := -lssl -levent -lpthread -lcrypto -lsqlite3 -ldl -lwiringPi
