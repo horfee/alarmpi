@@ -24,7 +24,7 @@ endif
 
 #PREFIX  := 
 BINDIR = $(prefix)/bin
-HEADERS += $(prefix)/include
+HEADERS += $(DESTDIR)/usr/include
 LIBDIR += $(DESTDIR)/lib
 MANDIR = $(prefix)/man
 
@@ -186,7 +186,7 @@ all: alarmPI
 
 
 %.o: %.cpp
-	$(CROSS_COMPILE)$(CXX) -c -I"$(HEADERSPATH)" $(CFLAGS) $^ -o $@
+	$(CROSS_COMPILE)$(CXX) -c -I"$(HEADERS)" $(CFLAGS) $^ -o $@
 
 	
 # Tool invocations
