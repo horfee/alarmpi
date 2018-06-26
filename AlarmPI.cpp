@@ -200,13 +200,6 @@ int main(int argc, char* argv[]) {
 	alarmSystem = new alarmpi::AlarmSystem();
 	std::string m = alarmSystem->activeMode();
 
-	Property* accessPointPassword = alarmSystem->getProperty(PROPERTY_ACCESS_POINT_PASS);
-
-	if ( accessPointPassword == NULL ) {
-		accessPointPassword = new Property(PROPERTY_ACCESS_POINT_PASS, PROPERTY_ACCESS_POINT_PASS_DESCRIPTION, (std::string)DEFAULT_VALUE_ACCESS_POINT_PASS);
-		alarmSystem->addProperty(accessPointPassword);
-	}
-
 	Property* listeningAddress = alarmSystem->getProperty(PROPERTY_WEBSERVER_ADDR);
 	Property* listeningPort = alarmSystem->getProperty(PROPERTY_WEBSERVER_PORT);
 	Property* webserverRoot = alarmSystem->getProperty(PROPERTY_WEBSERVER_ROOT);

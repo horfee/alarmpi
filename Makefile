@@ -15,6 +15,12 @@ endif
 
 override CFLAGS += -ggdb -std=c++0x -O0 -Wall $(RPIFLAG) $(WIRINGPIFLAG) -pthread -c -fmessage-length=0 -MMD -MP -MF"$(@:%.o=%.d)" -MT"$(@)"
 
+
+CC_LIBS=
+ifneq ($(LIBSPATH),)
+	CC_LIBS=-L"$(LIBSPATH)"
+endif
+
 #PREFIX  :=
 DESTDIR=/Volumes/AlarmPI/workspace/alarmpi/lib
 BINDIR = $(prefix)/bin
@@ -170,10 +176,6 @@ actions/RingBellAction.d \
 actions/SendMessageAction.d 
 
 
-CC_LIBS=
-ifneq ($(LIBSPATH),)
-	CC_LIBS=-L"$(LIBSPATH)"
-endif
 
 # All Target
 all: alarmPI
@@ -187,7 +189,7 @@ all: alarmPI
 alarmPI: $(OBJS)
 	@echo 'Building target: $@'
 	@echo 'Library to use :  $(LIBS)'
-	$(CROSS_COMPILE)$(CC) -o "alarmPI" $(OBJS) $(USER_OBJS) $(LIBS) $(CC_LIBS) -L"$(LIBDIR)"
+	$(CROSS_COMPILE)$(CC) -o "alarmPI" $(OBJS) $(USER_OBJS) $(LIBS) $(CC_LIBS)
 	@echo 'Finished building target: $@'
 
 # Other Targets

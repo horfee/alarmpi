@@ -41,9 +41,9 @@ public:
 	NetworkModule();
 	virtual ~NetworkModule();
 
-	void startDeamondWithDefaultPassword(std::string defaultPassword);
+	void startConnectionManager();
 
-	void stopDeamon();
+	void stopConnectionManager();
 
 	std::vector<WifiDesc> listWifi() const;
 
@@ -60,16 +60,22 @@ public:
 	void addListener(NetworkListener *listener);
 
 	void removeListener(NetworkListener *listener);
+
+	void setEssidPassword(std::string password);
+
 private:
 
-	void deamonThreadCallback(std::string password);
+	void deamonThreadCallback();
 
 	std::thread* deamonThread;
 
 	std::atomic<bool> askedToStop;
 
 	std::mutex mutex;
+
 	std::condition_variable conditionVariable;
+
+	std::string ssidPassword;
 
 	std::vector<NetworkListener*> listeners;
 

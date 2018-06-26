@@ -124,6 +124,7 @@ public:
 	std::string getVersion() const;
 
 	bool mustStopActionThreads();
+
 protected:
 	virtual void loadConfiguration();
 	virtual void onSignalReceived(int value);

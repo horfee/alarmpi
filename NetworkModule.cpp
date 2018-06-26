@@ -48,35 +48,37 @@ NetworkModule::NetworkModule() {
 NetworkModule::~NetworkModule() {
 }
 
-void NetworkModule::startDeamondWithDefaultPassword(std::string defaultPassword) {
+void NetworkModule::startConnectionManager() {
 	if ( deamonThread != NULL ) return;
 	askedToStop = false;
-	this->deamonThread= new std::thread(&NetworkModule::deamonThreadCallback, this, defaultPassword);
+	this->deamonThread= new std::thread(&NetworkModule::deamonThreadCallback, this);
 }
 
-void notifyListeners(const NetworkModule &module) {
+//void notifyListeners(const NetworkModule &module) {
+//
+//	for(auto it = module.listeners.cbegin(); it != module.listeners.cend(); ++it) {
+//		(*it)->onConnectionStateChanged(module.isConnectedToNetwork());
+//	}
+//}
 
-	//it = module.listeners.cbegin();
-
-	//for(auto it = listeners.cbegin(); it != listeners.cend(); ++it) {
-	//(*it)->onConnectionStateChanged(module.isConnectedToNetwork());
-	//}
+void NetworkModule::setEssidPassword(std::string password){
+	this->ssidPassword = password;
 }
 
-void NetworkModule::deamonThreadCallback(std::string defaultPassword) {
+void NetworkModule::deamonThreadCallback() {
 	while (!askedToStop ) {
 		std::unique_lock<std::mutex> lck(this->mutex);
 		this->conditionVariable.wait_for(lck, std::chrono::seconds(30));
-		logMessage( LOG_INFO, "Checking if connected to a network");
+		logMessage( LOG_INFO, "Checking if connected to a network on wifi");
 		if ( !isConnectedToNetworkThroughInterface(getWifiInterface()) ) {
-			this->createAccessPoint(DEFAULT_ESSID, defaultPassword);
+			this->createAccessPoint(DEFAULT_ESSID, this->ssidPassword);
 		}
 
 	}
 
 }
 
-void NetworkModule::stopDeamon() {
+void NetworkModule::stopConnectionManager() {
 	if ( deamonThread == NULL ) return;
 	askedToStop = true;
 
@@ -153,7 +155,7 @@ bool NetworkModule::createAccessPoint(std::string essid, std::string password) {
 
 std::vector<std::string> NetworkModule::ipAddresses() const {
 #ifdef RPI
-	return split(exec("hostname -I"), {" "});
+	return split(exec("hostname -i"), {" "});
 #else
 	return {};
 #endif

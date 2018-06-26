@@ -116,9 +116,8 @@ AlarmSystem::AlarmSystem() {
 	gsmModule = NULL;
 #endif
 
+	startConnectionManager();
 
-	startDeamondWithDefaultPassword(this->getProperty(PROPERTY_ACCESS_POINT_PASS)->getStringValue());
-//	detectedDevices[12345678] = time(0);
 }
 
 AlarmSystem::~AlarmSystem() {
@@ -138,6 +137,8 @@ AlarmSystem::~AlarmSystem() {
 	saveConfiguration();
 
 	stopActionThreads();
+
+	stopConnectionManager();
 
 #ifdef WIRINGPI
 	if ( wirelessModule != NULL ) {
@@ -252,8 +253,6 @@ void AlarmSystem::associateActionAndMode(Device* device, Action* action, Mode* m
 		devicesModesActionsAssociations[key] = action->getName();
 	}
 
-
-
 	logMessage( LOG_DEBUG, "Creating association between %d, %s, %s", device->getId(), mode->getName().c_str(), action->getName().c_str());
 	dao->persistAssocation(device, mode, action);
 }
@@ -330,6 +329,7 @@ void AlarmSystem::loadConfiguration() {
 	}
 	if ( transmittingPinProperty == NULL ) {
 		transmittingPinProperty = new Property(PROPERTY_TRANSMITTING_PIN, PROPERTY_TRANSMITTING_PIN_DESCRIPTION, DEFAULT_VALUE_TRANSMITTING_PIN);
+		transmittingPinProperty = new Property(PROPERTY_TRANSMITTING_PIN, PROPERTY_TRANSMITTING_PIN_DESCRIPTION, DEFAULT_VALUE_TRANSMITTING_PIN);
 		properties.push_back(transmittingPinProperty);
 		dao->persistProperty(transmittingPinProperty);
 	}
@@ -373,6 +373,14 @@ void AlarmSystem::loadConfiguration() {
 		properties.push_back(localeProperty);
 		dao->persistProperty(localeProperty);
 	}
+
+	Property* accessPointPassword = getProperty(PROPERTY_ACCESS_POINT_PASS);
+	if ( accessPointPassword == NULL ) {
+		accessPointPassword = new Property(PROPERTY_ACCESS_POINT_PASS, PROPERTY_ACCESS_POINT_PASS_DESCRIPTION, (std::string)DEFAULT_VALUE_ACCESS_POINT_PASS);
+		properties.push_back(accessPointPassword);
+		dao->persistProperty(accessPointPassword);
+	}
+	this->setEssidPassword(accessPointPassword->getStringValue());
 
 	//std::locale l = std::locale(localeProperty->getStringValue() + ".UTF-8");
 	//std::locale::global(l);

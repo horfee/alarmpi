@@ -68,6 +68,7 @@ typedef uint8_t byte;
 #define CREG_RC_ENABLE		0x1010000
 #define CREG_RC_ENABLE_LOC	0x1110000
 
+#define LEN(array) (sizeof((array))/sizeof((array[0])))
 
 namespace alarmpi {
 
@@ -88,6 +89,7 @@ void SIM800Module::sendCommand(std::string cmd, bool includeRF) {
 		logMessage( LOG_CRIT, "Unable to send %s", cmd.c_str());
 	}
 	sendingMutex.unlock();
+	logMessage( LOG_DEBUG, "SIM800L - send] : done");
 }
 
 SIM800Command SIM800Module::readCommand(std::string awaitedCommand) {
@@ -115,6 +117,7 @@ SIM800Command SIM800Module::readCommand(std::string awaitedCommand) {
 	SIM800Command cmd;
 	cmd.text = res;
 	cmd.status = val;
+	logMessage( LOG_DEBUG, "SIM800L - read] : command \"%s\" read", res.c_str());
 	return cmd;
 }
 
@@ -126,18 +129,19 @@ void SIM800Module::unattendCommandsCallBack() {
 
 void SIM800Module::receivingThreadCallBack() {
 	std::string buf;
+	char rx_buffer[256];
 
 	while(!stop) {
 		if ( simUARTFileStream != -1 ) {
-			char rx_buffer[256];
-			int rx_length = read(simUARTFileStream, (void*)rx_buffer, 255);		//Filestream, buffer to store in, number of bytes to read (max)
+			logMessage( LOG_DEBUG, "Waiting for data");
+			int rx_length = read(simUARTFileStream, (void*)rx_buffer, LEN(rx_buffer)-1);		//Filestream, buffer to store in, number of bytes to read (max)
 			if (rx_length < 0) {
 				logMessage( LOG_ERR, "An error occured : %d bytes read", rx_length);
-			} else if (rx_length > 0) {
-//				debugDisplayText(buf);
+			} else if (rx_length >= 0) {
 				rx_buffer[rx_length] = '\0';
 				buf.append(rx_buffer, rx_length);
 
+				logMessage( LOG_DEBUG, "Data received (%d) : %s", rx_length, rx_buffer);
 				std::string ringCommandStr("(\r\nRING\r\n)");
 				if ( clipFlag ) {
 					ringCommandStr.append("(\r\n\\+CLIP: )(\"[^\"]*\")(,)([0-9]+)((,)(\"[^\"]*\")(,)([0-9]+)(,)(\"[^\"]*\")(,)([0-9]+))?\r\n") ;
@@ -234,15 +238,28 @@ SIM800Module::SIM800Module(int resetPIN, std::string uartStream, int baudrate) {
 
 	struct termios options;
 	tcgetattr(simUARTFileStream, &options);
-	options.c_cflag = baudrate | CS8 | CLOCAL | CREAD ;		//<Set baud rate
+	cfsetspeed(&options, baudrate);
+
+	options.c_cflag &= ~CSIZE;
+	options.c_cflag |= CS8;
+	options.c_cflag &=~PARENB;
+	options.c_cflag &= ~CSTOPB;
+
+	options.c_cflag |= CLOCAL;
+	options.c_cflag |= CREAD;
+
+//	options.c_cflag = baudrate | CS8 | CLOCAL | CREAD ;		//<Set baud rate
 	options.c_iflag = IGNPAR;
 	options.c_oflag = 0;
 	options.c_lflag = 0;
 	options.c_cc[VMIN] = 0;
 	options.c_cc[VTIME] = 5;
 
-	tcflush(simUARTFileStream, TCIFLUSH);
+	cfmakeraw(&options);
 	tcsetattr(simUARTFileStream, TCSANOW, &options);
+
+	//tcflush(simUARTFileStream, TCIFLUSH);
+	//tcsetattr(simUARTFileStream, TCSANOW, &options);
 
 	callingPhone = false;
 
@@ -253,12 +270,14 @@ SIM800Module::SIM800Module(int resetPIN, std::string uartStream, int baudrate) {
 	int wait = 0;
 	bool r;
 	do {
+		logMessage( LOG_DEBUG, "Checking if module is ready");
 		r = !isReady();
 		if ( r ) {
+			logMessage( LOG_DEBUG, "Module not ready. Waiting 10ms");
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 		}
 	} while(r && wait++ < 500) ;
-
+	logMessage( LOG_DEBUG, "We stopped waiting");
 
 	clipFlag = getClipStatus();
 
@@ -270,6 +289,7 @@ SIM800Module::SIM800Module(int resetPIN, std::string uartStream, int baudrate) {
 	}
 
 
+	logMessage( LOG_DEBUG, "SIM 800 module started");
 }
 
 SIM800Module::~SIM800Module() {
